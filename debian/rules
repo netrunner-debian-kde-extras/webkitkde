@@ -5,7 +5,10 @@
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
-	cmake
+
+        mkdir build
+        (cd build; cmake ..)
+
 	touch configure-stamp
 
 
@@ -14,7 +17,7 @@ build: build-stamp
 build-stamp: configure-stamp
 	dh_testdir
 
-	$(MAKE)
+	$(MAKE) -C build
 
 	touch $@
 
@@ -23,8 +26,7 @@ clean:
 	dh_testroot
 	rm -f build-stamp configure-stamp
 
-	# Add here commands to clean up after the build process.
-	$(MAKE) clean
+        rm -rf build
 
 	dh_clean
 
@@ -34,8 +36,7 @@ install: build
 	dh_clean -k
 	dh_installdirs
 
-	# Add here commands to install the package into debian/webkitkde.
-	$(MAKE) DESTDIR=$(CURDIR)/debian/konq-plugin-webkit install
+	$(MAKE) -C build DESTDIR=$(CURDIR)/debian/konq-plugin-webkit install
 
 
 binary-indep: build install
@@ -45,12 +46,6 @@ binary-arch: build install
 	dh_testroot
 	dh_installchangelogs
 	dh_installdocs
-#	dh_installexamples
-#	dh_install
-#	dh_installmenu
-#	dh_installdebconf
-#	dh_installmime
-#	dh_installman
 	dh_link
 	dh_strip
 	dh_compress
