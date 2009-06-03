@@ -7,7 +7,7 @@ configure-stamp:
 	dh_testdir
 
 	mkdir build
-	(cd build; cmake ..)
+	(cd build; cmake -DCMAKE_INSTALL_PREFIX=/usr ..)
 
 	touch configure-stamp
 
