@@ -1,0 +1,6 @@
+webkitkde (0.0svn974351-1) unstable; urgency=low
+
+  * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 03 Jun 2009 07:24:08 +0200
+
