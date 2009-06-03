@@ -3,4 +3,8 @@ Webkitkde for Debian
 
 Please note that the Konqueror WebKit kpart is still quite experimental; please
 report only packaging issues to the Debian bug tracker, and report WebKit
-issues to its author.
+issues to its authors via the webkit-devel@kde.org mailing list or the KDE bug
+tracker (product "webkit").
+
+Open issues against webkit and the webkit kpart:
+https://bugs.kde.org/buglist.cgi?product=webkitkde&bug_status=UNCONFIRMED&bug_status=NEW&bug_status=ASSIGNED&bug_status=REOPENED

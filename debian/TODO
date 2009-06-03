@@ -1,7 +1,5 @@
 Packaging stuff:
 
-README.Debian:
- * add location for upstream bts
 control:
  * VCS-* headers
  * Check Build-Depends
@@ -13,6 +11,7 @@ dirs:
 postinst/postrm:
  * need to call kbuildsyocca4?
    (Probably not since it needs to be called as user, not root.)
+ * split into the kpart (Konq plugin) and the qtwebkit/kde bindings
 
 Build stuff:
 dpkg-shlibdeps: warning: dependency on libQtSvg.so.4 could be avoided if "debian/konq-plugin-webkit/usr/lib/libwebkitkde.so.1.0.0 debian/konq-plugin-webkit/usr/lib/kde4/webkitkdepart.so debian/konq-plugin-webkit/usr/lib/libkdewebkit.so.1.0.0 debian/konq-plugin-webkit/usr/lib/libkdenetwork.so.1.0.0" were not uselessly linked against it (they use none of its symbols).
