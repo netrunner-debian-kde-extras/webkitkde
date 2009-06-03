@@ -1,6 +1,6 @@
-webkitkde for Debian
+Webkitkde for Debian
 --------------------
 
-<possible notes regarding this package - if none, delete this file>
-
- -- Adrian von Bidder <cmot@debian.org>  Wed, 03 Jun 2009 07:24:08 +0200
+Please note that the Konqueror WebKit kpart is still quite experimental; please
+report only packaging issues to the Debian bug tracker, and report WebKit
+issues to its author.

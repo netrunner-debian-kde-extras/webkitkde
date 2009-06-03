@@ -1,0 +1,14 @@
+README.Debian:
+ * add location for upstream bts
+control:
+ * VCS-* headers
+ * Check Build-Depends
+copyright:
+ * write in the new official syntax
+ * verify list of upstream authors
+dirs:
+ * complete (delete from hg as it's autobuilt anyway?)
+postinst/postrm:
+ * need to call kbuildsyocca4?
+   (Probably not since it needs to be called as user, not root.)
+

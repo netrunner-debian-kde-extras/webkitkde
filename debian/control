@@ -1,13 +1,17 @@
 Source: webkitkde
-Section: unknown
-Priority: extra
+Section: web
+Priority: optional
 Maintainer: Adrian von Bidder <cmot@debian.org>
-Build-Depends: debhelper (>= 7)
-Standards-Version: 3.7.3
-Homepage: <insert the upstream URL, if relevant>
+Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev
+Standards-Version: 3.8.0
+Homepage: http://techbase.kde.org/Projects/WebKit
 
-Package: webkitkde
+Package: konq-plugin-webkit
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: <insert up to 60 chars description>
- <insert long description, indented with spaces>
+Description: WebKit plug-in for Konqueror
+ A Plug-In for the Konqueror web browser, allowing the WebKit HTML renderer
+ to be used instead of the traditional KHTML.
+ .
+ NOTE: This is a highy experimental software and may not work as well as
+ expected.
