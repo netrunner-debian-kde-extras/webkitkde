@@ -1,2 +1,9 @@
-build
-debian/konq-plugin-webkit
+build/
+build-stamp$
+configure-stamp$
+debian/files$
+debian/konq-plugin-webkit/
+debian/konq-plugin-webkit.debhelper.log$
+debian/konq-plugin-webkit.postinst.debhelper$
+debian/konq-plugin-webkit.postrm.debhelper$
+debian/konq-plugin-webkit.substvars$

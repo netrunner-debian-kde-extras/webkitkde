@@ -1,0 +1,4 @@
+# konq-plugin-webkit is not usually a library other stuff builds against, so
+# I can get away with cheating on some of the library packaging rules.
+konq-plugin-webkit binary: non-dev-pkg-with-shlib-symlink
+konq-plugin-webkit binary: package-name-doesnt-match-sonames
