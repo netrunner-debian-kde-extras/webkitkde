@@ -1,5 +1,8 @@
 Packaging stuff:
 
+ * split into the kpart (Konq plugin) and the qtwebkit/kde bindings
+
+File by file:
 control:
  * VCS-* headers
  * Check Build-Depends
@@ -11,7 +14,6 @@ dirs:
 postinst/postrm:
  * need to call kbuildsyocca4?
    (Probably not since it needs to be called as user, not root.)
- * split into the kpart (Konq plugin) and the qtwebkit/kde bindings
 README.sources:
  * describe hg-buildpackage use (repo layout with branches)
 

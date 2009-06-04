@@ -1,7 +1,6 @@
 webkitkde (0.0.20090529svn974351-0.1) UNRELEASED; urgency=low
 
-  * Initial packaging
+  * Initial packaging (closes: #531754)
   * No upload, only for review
 
- -- Adrian von Bidder <cmot@debian.org>  Fri, 27 Feb 2009 22:07:24 +0100
-
+ -- Adrian von Bidder <cmot@debian.org>  Thu, 04 Jun 2009 13:11:18 +0200
