@@ -3,7 +3,7 @@ Section: web
 Priority: optional
 Maintainer: Adrian von Bidder <cmot@debian.org>
 Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev
-Standards-Version: 3.8.0
+Standards-Version: 3.8.1
 Homepage: http://techbase.kde.org/Projects/WebKit
 
 Package: konq-plugin-webkit
