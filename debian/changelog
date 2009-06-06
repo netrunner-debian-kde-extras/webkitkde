@@ -1,6 +1,5 @@
-webkitkde (0.0.20090529svn974351-0.1) UNRELEASED; urgency=low
+webkitkde (0.0.20090529svn974351-1) experimental; urgency=low
 
   * Initial packaging (closes: #531754)
-  * No upload, only for review
 
- -- Adrian von Bidder <cmot@debian.org>  Thu, 04 Jun 2009 13:11:18 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Sat, 06 Jun 2009 15:20:44 +0200
