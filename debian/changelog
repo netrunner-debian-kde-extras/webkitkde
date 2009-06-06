@@ -1,3 +1,9 @@
+webkitkde (0.0.20090529svn974351-2) UNRELEASED; urgency=low
+
+  * debian/rules: use dh_prep, not dh_clean -k
+
+ -- Adrian von Bidder <cmot@debian.org>  Sat, 06 Jun 2009 16:07:13 +0200
+
 webkitkde (0.0.20090529svn974351-1) experimental; urgency=low
 
   * Initial packaging (closes: #531754)
