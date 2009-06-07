@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 
+include /usr/share/pkg-kde-tools/makefiles/1/variables.mk
 #export DH_VERBOSE=1
 
 configure: configure-stamp
@@ -7,7 +8,7 @@ configure-stamp:
 	dh_testdir
 
 	mkdir build
-	(cd build; cmake -DCMAKE_INSTALL_PREFIX=/usr ..)
+	cd build && cmake .. -DCMAKE_INSTALL_PREFIX=/usr $(DEB_CMAKE_KDE4_FLAGS)
 
 	touch configure-stamp
 
