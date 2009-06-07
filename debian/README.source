@@ -1,0 +1,20 @@
+The source of this package is managed by using a hg-buildpackage managed
+mercurial repository at https://fortytwo.ch/hg/pkg-webkitkde.
+
+Typically, you'd start by:
+
+ $ hg clone https://fortytwo.ch/hg/pkg-webkitkde webkitkde.upstream
+ $ hg clone webkitkde.upstream webkitkde
+ $ cd webkitkde.upstream
+ ..$ hg update -r UPSTREAM_webkitkde_<version>
+  # TODO verify: is this correct?  the "adding tag" version is also on the
+  # upstream branch and is one rev later.  Need "hg update" now?
+ ..$ cd ../webkitkde
+ ..$ hg-buildpackage
+
+To summarize: the repo contains "upstream" and "default" branches, whereas
+hg-buildpackage makes no assumptions about the branches.  But once the dirs
+are set up like this (and as long as care is taken to always import upstream
+on the upstream branch), hg-buildpackage works just fine.
+
+So far, the upstream source is unpatched.
