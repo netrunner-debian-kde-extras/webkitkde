@@ -19,3 +19,6 @@ dpkg-shlibdeps: warning: dependency on libQtSvg.so.4 could be avoided if "debian
 dpkg-shlibdeps: warning: dependency on libQtXml.so.4 could be avoided if "debian/konq-plugin-webkit/usr/lib/libwebkitkde.so.1.0.0 debian/konq-plugin-webkit/usr/lib/kde4/webkitkdepart.so debian/konq-plugin-webkit/usr/lib/libkdewebkit.so.1.0.0 debian/konq-plugin-webkit/usr/lib/libkdenetwork.so.1.0.0" were not uselessly linked against it (they use none of its symbols).
 dpkg-shlibdeps: warning: dependency on libQtDBus.so.4 could be avoided if "debian/konq-plugin-webkit/usr/lib/libwebkitkde.so.1.0.0 debian/konq-plugin-webkit/usr/lib/kde4/webkitkdepart.so debian/konq-plugin-webkit/usr/lib/libkdewebkit.so.1.0.0 debian/konq-plugin-webkit/usr/lib/libkdenetwork.so.1.0.0" were not uselesslylinked against it (they use none of its symbols).
 
+
+After squeeze (or even before?:
+remove Conflicts: konq-plugin-webkit from libwebkitkde1 package

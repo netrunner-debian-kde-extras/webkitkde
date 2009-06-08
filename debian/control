@@ -22,6 +22,7 @@ Package: libwebkitkde1
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Conflicts: konq-plugin-webkit (< 0.0.20090529svn974351-2)
 Description: KDE bindings for WebKit
  KDEWebKit provides the necessary gluecode to use the WebKit HTML rendering
  engine in KDE applications.
