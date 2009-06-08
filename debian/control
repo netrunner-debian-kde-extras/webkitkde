@@ -5,6 +5,8 @@ Maintainer: Adrian von Bidder <cmot@debian.org>
 Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev, pkg-kde-tools
 Standards-Version: 3.8.1
 Homepage: http://techbase.kde.org/Projects/WebKit
+Vcs-Browser: https://fortytwo.ch/hg/pkg-webkitkde
+Vcs-Hg: https://fortytwo.ch/hg/pkg-webkitkde
 
 Package: konq-plugin-webkit
 Architecture: any
