@@ -1,0 +1,2 @@
+# Is it really recommended to create a -dbg package with 4 files in it?
+libwebkitkde1-dev binary: debug-package-should-be-named-dbg

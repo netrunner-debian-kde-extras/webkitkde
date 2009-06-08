@@ -1,0 +1,5 @@
+usr/lib/*.so
+usr/share/kde4/apps/cmake/modules/FindWebKitPart.cmake
+usr/share/kde4/apps/cmake/modules/FindKdeWebKit.cmake
+usr/share/kde4/apps/cmake/modules/FindKdeNetwork.cmake
+usr/include/*

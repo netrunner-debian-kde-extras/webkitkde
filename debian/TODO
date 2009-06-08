@@ -1,8 +1,6 @@
-Packaging stuff:
-
- * split into the kpart (Konq plugin) and the qtwebkit/kde bindings
-
 File by file:
+control:
+ * generate dependencies of the -dev package automatically:
 copyright:
  * write in the new official syntax
  * verify list of upstream authors
@@ -12,7 +10,11 @@ postinst/postrm:
 README.source:
  * update to reflect how it really works.
 
-Build stuff:
+General packaging & build:
+
+ * is it usual practice to create a -dbg package for such small libraries?
+
+ * see:
 dpkg-shlibdeps: warning: dependency on libQtSvg.so.4 could be avoided if "debian/konq-plugin-webkit/usr/lib/libwebkitkde.so.1.0.0 debian/konq-plugin-webkit/usr/lib/kde4/webkitkdepart.so debian/konq-plugin-webkit/usr/lib/libkdewebkit.so.1.0.0 debian/konq-plugin-webkit/usr/lib/libkdenetwork.so.1.0.0" were not uselessly linked against it (they use none of its symbols).
 dpkg-shlibdeps: warning: dependency on libQtXml.so.4 could be avoided if "debian/konq-plugin-webkit/usr/lib/libwebkitkde.so.1.0.0 debian/konq-plugin-webkit/usr/lib/kde4/webkitkdepart.so debian/konq-plugin-webkit/usr/lib/libkdewebkit.so.1.0.0 debian/konq-plugin-webkit/usr/lib/libkdenetwork.so.1.0.0" were not uselessly linked against it (they use none of its symbols).
 dpkg-shlibdeps: warning: dependency on libQtDBus.so.4 could be avoided if "debian/konq-plugin-webkit/usr/lib/libwebkitkde.so.1.0.0 debian/konq-plugin-webkit/usr/lib/kde4/webkitkdepart.so debian/konq-plugin-webkit/usr/lib/libkdewebkit.so.1.0.0 debian/konq-plugin-webkit/usr/lib/libkdenetwork.so.1.0.0" were not uselesslylinked against it (they use none of its symbols).

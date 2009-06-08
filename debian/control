@@ -17,3 +17,22 @@ Description: WebKit plug-in for Konqueror
  .
  NOTE: This is a highy experimental software and may not work as well as
  expected.
+
+Package: libwebkitkde1
+Architecture: any
+Section: libs
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: KDE bindings for WebKit
+ KDEWebKit provides the necessary gluecode to use the WebKit HTML rendering
+ engine in KDE applications.
+
+Package: libwebkitkde1-dev
+Architecture: any
+Section: libdevel
+Depends: libwebkitkde1 (= 0.0.20090529svn974351-2)
+Description: KDE bindings for WebKit, Development files
+ KDEWebKit provides the necessary gluecode to use the WebKit HTML rendering
+ engine in KDE applications.
+ .
+ This package contains the headers and debugging synmbols files needed for
+ software development.

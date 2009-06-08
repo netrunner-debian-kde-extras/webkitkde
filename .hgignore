@@ -3,7 +3,10 @@ build-stamp$
 configure-stamp$
 debian/files$
 debian/konq-plugin-webkit/
-debian/konq-plugin-webkit.debhelper.log$
-debian/konq-plugin-webkit.postinst.debhelper$
-debian/konq-plugin-webkit.postrm.debhelper$
-debian/konq-plugin-webkit.substvars$
+debian/.*\.debhelper.log$
+debian/.*\.postinst.debhelper$
+debian/.*\.postrm.debhelper$
+debian/.*\.substvars$
+debian/libwebkitkde1/
+debian/libwebkitkde1-dev/
+debian/tmp/
