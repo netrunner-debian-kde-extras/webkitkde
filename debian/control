@@ -8,32 +8,40 @@ Homepage: http://techbase.kde.org/Projects/WebKit
 Vcs-Browser: https://fortytwo.ch/hg/pkg-webkitkde
 Vcs-Hg: https://fortytwo.ch/hg/pkg-webkitkde
 
-Package: konq-plugin-webkit
+Package: kpart-webkit
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: WebKit plug-in for Konqueror
- A Plug-In for the Konqueror web browser, allowing the WebKit HTML renderer
- to be used instead of the traditional KHTML.
+Depends: ${shlibs:Depends}, ${misc:Depends}, libwebkitkde1 (= ${binary:Version})
+Description: WebKit KPart
+ A Plug-In for the Konqueror web browser and other KDE applications allowing
+ the WebKit HTML renderer to be used instead of the traditional KHTML.
  .
- NOTE: This is a highy experimental software and may not work as well as
- expected.
+ NOTE: This is highy experimental software and may not work as well as expected.
 
 Package: libwebkitkde1
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Conflicts: konq-plugin-webkit (< 0.0.20090529svn974351-2)
 Description: KDE bindings for WebKit
- KDEWebKit provides the necessary gluecode to use the WebKit HTML rendering
+ KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
 
-Package: libwebkitkde1-dev
+Package: libwebkitkde-dev
 Architecture: any
 Section: libdevel
-Depends: libwebkitkde1 (= 0.0.20090529svn974351-2)
+Depends: libwebkitkde1 (= ${binary:Version}), kdelibs5-dev
 Description: KDE bindings for WebKit, Development files
- KDEWebKit provides the necessary gluecode to use the WebKit HTML rendering
+ KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
  .
- This package contains the headers and debugging synmbols files needed for
- software development.
+ This package contains the header files needed for software development.
+
+Package: libwebkitkde-dbg
+Architecture: any
+Priority: extra
+Section: debug
+Depends: libwebkitkde1 (= ${binary:Version}), kdelibs5-dbg
+Description: KDE bindings for WebKit, Development files
+ KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
+ engine in KDE applications.
+ .
+ This package contains the debugging synmbols needed for software development.

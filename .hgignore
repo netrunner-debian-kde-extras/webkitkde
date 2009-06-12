@@ -2,11 +2,12 @@ build/
 build-stamp$
 configure-stamp$
 debian/files$
-debian/konq-plugin-webkit/
+debian/kpart-webkit/
 debian/.*\.debhelper.log$
 debian/.*\.postinst.debhelper$
 debian/.*\.postrm.debhelper$
 debian/.*\.substvars$
 debian/libwebkitkde1/
-debian/libwebkitkde1-dev/
+debian/libwebkitkde-dbg/
+debian/libwebkitkde-dev/
 debian/tmp/

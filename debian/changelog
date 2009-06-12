@@ -1,3 +1,11 @@
+webkitkde (0.0.20090529svn974351-3) experimental; urgency=low
+
+  * create -dbg package
+  * rename konq-plugin-webkit to kpart-webkit
+  * improve dependencies
+
+ -- Adrian von Bidder <cmot@debian.org>  Fri, 12 Jun 2009 07:15:30 +0200
+
 webkitkde (0.0.20090529svn974351-2) experimental; urgency=low
 
   * debian/rules: use dh_prep, not dh_clean -k
