@@ -10,6 +10,7 @@ configure-stamp:
 	mkdir build
 	cd build && cmake .. \
             -DCMAKE_INSTALL_PREFIX=/usr \
+            -DCMAKE_CXX_FLAGS="-Wl,--as-needed -Wl,-z,defs" \
             $(DEB_CMAKE_KDE4_FLAGS)
 
 	touch configure-stamp
