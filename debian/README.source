@@ -6,11 +6,9 @@ Typically, you'd start by:
  $ hg clone https://fortytwo.ch/hg/pkg-webkitkde webkitkde.upstream
  $ hg clone webkitkde.upstream webkitkde
  $ cd webkitkde.upstream
- ..$ hg update -r UPSTREAM_webkitkde_<version>
-  # TODO verify: is this correct?  the "adding tag" version is also on the
-  # upstream branch and is one rev later.  Need "hg update" now?
- ..$ cd ../webkitkde
- ..$ hg-buildpackage
+ $ hg update -C upstream
+ $ cd ../webkitkde
+ $ hg-buildpackage
 
 To summarize: the repo contains "upstream" and "default" branches, whereas
 hg-buildpackage makes no assumptions about the branches.  But once the dirs
@@ -18,3 +16,20 @@ are set up like this (and as long as care is taken to always import upstream
 on the upstream branch), hg-buildpackage works just fine.
 
 So far, the upstream source is unpatched.
+
+Import a new upstream version:
+(don't use hg-importorig because of #531746)
+
+ $ cd webkitkde.upstream
+ $ rm -rf *
+ $ svn export <path/to/svn> .
+ $ hg addremove
+ $ hg ci -m "import upstream"
+ $ hg tag UPSTREAM_webkitkde_0.0.<date>svn<rev>
+
+ $ cd ../webkitkde
+ $ hg pull
+ $ hg merge upstream
+
+(arguably a mercurial bug: you'll get a merge conflict in .hgtags)
+
