@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Service
 Comment=Embeddable HTML component
+Comment[bg]=Компонент на HTML за вграждане
 Comment[de]=Einbettungsfähige HTML-Komponente
 Comment[es]=Componente de HTML empotrable
 Comment[et]=Põimitav HTML-komponent
@@ -12,6 +13,7 @@ Comment[lt]=Įdedamas HTML komponentas
 Comment[ml]=എംബഡബിള്‍ ആയിട്ടുള്ള എച്ച്ടിഎംഎല്‍ ഘടകം
 Comment[nds]=Inbettbor HTML-Komponent
 Comment[nl]=Inbedbare HTML-component
+Comment[nn]=Innebyggbar HTML-komponent
 Comment[pa]=ਇੰਬੈੱਡਡ HTML ਭਾਗ
 Comment[pt]=Componente de HTML incorporada
 Comment[pt_BR]=Componente HTML que pode ser embutido
@@ -23,6 +25,7 @@ Comment[tr]=Gömülebilir HTML bileşeni
 Comment[uk]=Вмонтований HTML-компонент
 Comment[x-test]=xxEmbeddable HTML componentxx
 Comment[zh_CN]=嵌入式 HTML 组件
+Comment[zh_TW]=可內嵌的 HTML 元件
 MimeType=text/html;application/xml;application/xhtml+xml;
 Icon=webkit
 Name=WebKit

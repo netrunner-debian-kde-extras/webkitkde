@@ -655,6 +655,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
 #if QT_VERSION >= 0x040500
   QWebSettings::globalSettings()->setAttribute(QWebSettings::ZoomTextOnly, zoomTextOnly());
 #endif
+  QWebSettings::globalSettings()->setAttribute(QWebSettings::DeveloperExtrasEnabled, isJavaScriptDebugEnabled());
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::StandardFont, stdFontName());
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::FixedFont, fixedFontName());
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::SerifFont, serifFontName());
@@ -775,7 +776,7 @@ void WebKitSettings::addAdFilter( const QString &url )
     // ### refactor somewhat
     if (url.length()>2 && url[0]=='/' && url[url.length()-1] == '/')
     {
-        QString inside = url.mid(1, url.length()-2);
+        const QString inside = url.mid(1, url.length()-2);
         rx.setPattern(inside);
     }
     else
@@ -787,7 +788,7 @@ void WebKitSettings::addAdFilter( const QString &url )
     if (rx.isValid())
     {
         int last=config.readEntry("Count", 0);
-        QString key = "Filter-" + QString::number(last);
+        const QString key = "Filter-" + QString::number(last);
         config.writeEntry(key, url);
         config.writeEntry("Count",last+1);
         config.sync();

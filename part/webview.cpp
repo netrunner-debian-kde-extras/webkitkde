@@ -162,6 +162,10 @@ void WebView::partActionPopupMenu(KParts::BrowserExtension::ActionGroupMap &part
         partActions.append(action);
     }
 
+    if (settings()->testAttribute(QWebSettings::DeveloperExtrasEnabled)) {
+        partActions.append(pageAction(QWebPage::InspectElement));
+    }
+
     partGroupMap.insert("partactions", partActions);
 }
 
@@ -250,7 +254,7 @@ void WebView::WebViewPrivate::addSearchActions(QList<QAction *>& selectActions)
 
     QString name;
     if (KUriFilter::self()->filterUri(data, list)) {
-        QString iconPath = KStandardDirs::locate("cache", KMimeType::favIconForUrl(data.uri()) + ".png");
+        const QString iconPath = KStandardDirs::locate("cache", KMimeType::favIconForUrl(data.uri()) + ".png");
         if (iconPath.isEmpty())
             icon = KIcon("edit-find");
         else
@@ -288,7 +292,7 @@ void WebView::WebViewPrivate::addSearchActions(QList<QAction *>& selectActions)
             data.setData(searchProviderPrefix + "some keyword");
 
             if (KUriFilter::self()->filterUri(data, list)) {
-                QString iconPath = KStandardDirs::locate("cache", KMimeType::favIconForUrl(data.uri()) + ".png");
+                const QString iconPath = KStandardDirs::locate("cache", KMimeType::favIconForUrl(data.uri()) + ".png");
                 if (iconPath.isEmpty())
                     icon = KIcon("edit-find");
                 else
@@ -335,3 +339,4 @@ void WebView::openSelection()
 
     emit d->part->browserExtension()->openUrlRequest(d->selectedTextAsOneLine(), KParts::OpenUrlArguments(), browserArgs);
 }
+
