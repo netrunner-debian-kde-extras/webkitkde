@@ -1,10 +1,10 @@
-webkitkde (0.0.20090715svn995948-0) UNRELEASED; urgency=low
+webkitkde (0.0.20090715svn995948-1) unstable; urgency=low
 
   * New upstream snapshot
   * Upload to unstable to get wider testing audience.
   * Use -Wl,--as-needed to trim dependencies
 
- -- Adrian von Bidder <cmot@debian.org>  Wed, 15 Jul 2009 14:45:50 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 15 Jul 2009 14:51:22 +0200
 
 webkitkde (0.0.20090529svn974351-3) experimental; urgency=low
 
