@@ -114,9 +114,9 @@ protected slots:
 #if QT_VERSION >= 0x040600
         QUrl url = view->guessUrlFromString(string);
 #else
-        QUrl url(url);
+        QUrl url(string);
 #endif
-        if (!url.isValid())
+        if (url.isRelative())
             url = QUrl("http://" + string + "/");
         urlEdit->setText(url.toEncoded());
         view->load(url);
