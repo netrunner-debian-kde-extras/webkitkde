@@ -1,8 +1,8 @@
-webkitkde (0.0.20090807svn1008173-1) UNRELEASED; urgency=low
+webkitkde (0.0.20090808svn1008408-1) UNRELEASED; urgency=low
 
   * New upstream snapshot
 
- -- Adrian von Bidder <cmot@debian.org>  Sun, 09 Aug 2009 17:15:47 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Sun, 09 Aug 2009 17:32:29 +0200
 
 webkitkde (0.0.20090715svn995948-1) unstable; urgency=low
 
