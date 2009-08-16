@@ -218,6 +218,15 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
     KComponentData componentData(&about);
     setComponentData(componentData);
 
+    // NOTE: If the application does not set its version number, we automatically
+    // set it to KDE's version number so that the default user-agent string contains
+    // proper version number information.
+    if (QCoreApplication::applicationVersion().isEmpty())
+      QCoreApplication::setApplicationVersion(QString("%1.%2.%3")
+                                              .arg(KDE::versionMajor())
+                                              .arg(KDE::versionMinor())
+                                              .arg(KDE::versionRelease()));
+
     setWidget(new QWidget(parentWidget));
     QVBoxLayout* lay = new QVBoxLayout(widget());
     lay->setMargin(0);
@@ -362,7 +371,7 @@ bool WebKitPart::openUrl(const KUrl &url)
     setSslInfo(metaData.toVariant(), url);
     args.metaData().insert("ssl_was_in_use", (d->sslInfo.isValid() ? "TRUE" : "FALSE"));
 
-    //setUrl(url); // urlChanged will take care of this for us...
+    setUrl(url); //We can't wait that urlChanged is calling otherwise some plugins as babelfish can't be enabled
     d->webView->loadUrl(url, args, browserExtension()->browserArguments());
     return true;
 }
