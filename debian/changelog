@@ -1,11 +1,10 @@
-webkitkde (0.0.20090813svn1010646-1) UNRELEASED; urgency=low
+webkitkde (0.0.20090824svn1015061-1) unstable; urgency=low
 
   * New upstream snapshot
-    - !!! Needs fixed kdelibs (or kdelibs 4.3.1) !!!
-    See #540676
     - Fixes "crash on exit" when using flash
+  * Needs at least kdelibs 4.3.1 (see #540676)
 
- -- Adrian von Bidder <cmot@debian.org>  Sun, 16 Aug 2009 16:53:02 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 02 Sep 2009 14:43:00 +0200
 
 webkitkde (0.0.20090715svn995948-1) unstable; urgency=low
 

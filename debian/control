@@ -2,8 +2,8 @@ Source: webkitkde
 Section: web
 Priority: optional
 Maintainer: Adrian von Bidder <cmot@debian.org>
-Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev, pkg-kde-tools
-Standards-Version: 3.8.1
+Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev (>= 4:4.3.1), pkg-kde-tools
+Standards-Version: 3.8.3
 Homepage: http://techbase.kde.org/Projects/WebKit
 Vcs-Browser: https://fortytwo.ch/hg/pkg-webkitkde
 Vcs-Hg: https://fortytwo.ch/hg/pkg-webkitkde
