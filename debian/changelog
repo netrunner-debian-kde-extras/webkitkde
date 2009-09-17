@@ -1,3 +1,10 @@
+webkitkde (0.0.20090917svn1024819-1) unstable; urgency=low
+
+  * New upstream snapshot
+    - calculates font size from DPI
+
+ -- Adrian von Bidder <cmot@debian.org>  Thu, 17 Sep 2009 13:38:03 +0200
+
 webkitkde (0.0.20090824svn1015061-1) unstable; urgency=low
 
   * New upstream snapshot
