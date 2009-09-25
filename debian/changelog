@@ -1,3 +1,11 @@
+webkitkde (0.0.20090925svn1027805-1) unstable; urgency=low
+
+  * New upstream snapshot
+    - properly abort page loading
+    - better SSL info
+
+ -- Adrian von Bidder <cmot@debian.org>  Fri, 25 Sep 2009 14:19:33 +0200
+
 webkitkde (0.0.20090917svn1024819-1) unstable; urgency=low
 
   * New upstream snapshot

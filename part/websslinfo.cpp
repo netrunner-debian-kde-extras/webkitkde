@@ -41,14 +41,25 @@ public:
 };
 
 WebSslInfo::WebSslInfo()
-                :d(new WebSslInfo::WebSslInfoPrivate)
+           :d(new WebSslInfo::WebSslInfoPrivate)
 {
+}
+
+WebSslInfo::WebSslInfo(const WebSslInfo& other)
+           :d(new WebSslInfo::WebSslInfoPrivate)
+{
+  *this = other;
 }
 
 WebSslInfo::~WebSslInfo()
 {
   delete d;
   d = 0;
+}
+
+bool WebSslInfo::isValid() const
+{
+  return !d->peerAddress.isNull();
 }
 
 QUrl WebSslInfo::url() const
@@ -96,30 +107,36 @@ QList<QSslCertificate> WebSslInfo::certificateChain() const
   return d->certificateChain;
 }
 
-bool WebSslInfo::isValid() const
+WebSslInfo& WebSslInfo::operator=(const WebSslInfo& other)
 {
-  return d->url.isValid();
+  d->ciphers = other.ciphers();
+  d->protocol = other.protocol();
+  d->certErrors = other.certificateErrors();
+  d->peerAddress = other.peerAddress();
+  d->parentAddress = other.parentAddress();
+  d->certificateChain = other.certificateChain();
+
+  d->usedCipherBits = other.usedChiperBits();
+  d->supportedCipherBits = other.supportedChiperBits();
+
+  return *this;
 }
 
 void WebSslInfo::reset()
 {
-  d->url = QUrl();
+  d->url.clear();
   d->ciphers.clear();
   d->protocol.clear();
   d->certErrors.clear();
   d->peerAddress.clear();
   d->parentAddress.clear();
+  d->certificateChain.clear();
 
   d->usedCipherBits = 0;
   d->supportedCipherBits = 0;
 }
 
-void WebSslInfo::setUrl (const QString& url)
-{
-  d->url = url;
-}
-
-void WebSslInfo::setUrl (const QUrl& url)
+void WebSslInfo::setUrl (const QUrl &url)
 {
   d->url = url;
 }
