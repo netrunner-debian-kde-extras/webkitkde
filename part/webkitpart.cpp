@@ -24,47 +24,38 @@
  */
 
 #include "webkitpart.h"
+#include "webkitpart_ext.h"
 
 #include "webview.h"
 #include "webpage.h"
 #include "websslinfo.h"
+
 #include "sslinfodialog_p.h"
-#include <kdewebkit/settings/webkitsettings.h>
+
+#include <ui/searchbar.h>
 
 #include <KDE/KParts/GenericFactory>
 #include <KDE/KParts/Plugin>
 #include <KDE/KAboutData>
-#include <KDE/KUriFilterData>
-#include <KDE/KDesktopFile>
 #include <KDE/KConfigGroup>
 #include <KDE/KAction>
 #include <KDE/KActionCollection>
-#include <KDE/KRun>
-#include <KDE/KTemporaryFile>
-#include <KDE/KToolInvocation>
-#include <KDE/KFileDialog>
 #include <KDE/KMessageBox>
 #include <KDE/KStandardDirs>
 #include <KDE/KIconLoader>
 #include <KDE/KGlobal>
 #include <KDE/KStringHandler>
-#include <KDE/KIO/NetAccess>
 #include <kio/global.h>
 
-#include <QHttpRequestHeader>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QUrl>
-#include <QFile>
-#include <QClipboard>
-#include <QApplication>
-#include <QPlainTextEdit>
-#include <QVBoxLayout>
-#include <QPrintPreviewDialog>
-#include <QPair>
+#include <QtCore/QUrl>
+#include <QtCore/QFile>
+#include <QtCore/QPair>
+#include <QtGui/QApplication>
+#include <QtGui/QPlainTextEdit>
+#include <QtGui/QVBoxLayout>
+#include <QtGui/QPrintPreviewDialog>
+#include <QtWebKit/QWebFrame>
 
-#include <QtWebKit/QWebHistory>
-#include <QtWebKit/QWebHitTestResult>
 
 #define QL1(x)    QLatin1String(x)
 
@@ -162,7 +153,8 @@ public:
 
   bool updateHistory;
 
-  WebView *webView;
+  QPointer<WebView> webView;
+  QPointer<KDEPrivate::SearchBar> searchBar;
   WebKitBrowserExtension *browserExtension;
 };
 
@@ -193,14 +185,20 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
                                                 .arg(KDE::versionMinor())
                                                 .arg(KDE::versionRelease()));
 
-    setWidget(new QWidget(parentWidget));
-    QVBoxLayout* lay = new QVBoxLayout(widget());
+    QWidget *mainWidget = new QWidget (parentWidget);
+    mainWidget->setObjectName("webkitpart");
+    setWidget(mainWidget);
+
+    QVBoxLayout* lay = new QVBoxLayout(mainWidget);
     lay->setMargin(0);
     lay->setSpacing(0);
 
-    d->webView = new WebView(this, widget());
+    d->webView = new WebView (this, mainWidget);
+    d->searchBar = new KDEPrivate::SearchBar;
+
     lay->addWidget(d->webView);
-    lay->addWidget(d->webView->searchBar());
+    lay->addWidget(d->searchBar);
+
 
     connect(d->webView, SIGNAL(titleChanged(const QString &)),
             this, SLOT(setWindowTitle(const QString &)));
@@ -213,26 +211,36 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
             this, SIGNAL(setStatusBarText(const QString &)));
 #endif
 
+    connect(d->searchBar, SIGNAL(searchTextChanged(const QString &, bool)),
+            this, SLOT(searchForText(const QString &, bool)));
+
     WebPage* webPage = qobject_cast<WebPage*>(d->webView->page());
+    kDebug() << webPage;
     Q_ASSERT(webPage);
 
     connect(webPage, SIGNAL(loadStarted()),
             this, SLOT(loadStarted()));
-    connect(webPage, SIGNAL(loadMainPageFinished()),
-            this, SLOT(loadMainPageFinished()));
+    connect(webPage, SIGNAL(navigationRequestFinished()),
+            this, SLOT(navigationRequestFinished()));
     connect(webPage, SIGNAL(loadAborted(const QUrl &)),
             this, SLOT(loadAborted(const QUrl &)));
-    connect(webPage, SIGNAL(loadError(int, const QString &)),
-            this, SLOT(loadError(int, const QString &)));
+    connect(webPage, SIGNAL(loadError(int, const QString &, const QString &)),
+            this, SLOT(loadError(int, const QString &, const QString &)));
     connect(webPage, SIGNAL(linkHovered(const QString &, const QString &, const QString &)),
             this, SLOT(linkHovered(const QString &, const QString&, const QString &)));
-
-    connect(d->webView, SIGNAL(saveUrl(const KUrl &)),
-            webPage, SLOT(saveUrl(const KUrl &)));
 
     d->browserExtension = new WebKitBrowserExtension(this);
     connect(webPage, SIGNAL(loadProgress(int)),
             d->browserExtension, SIGNAL(loadingProgress(int)));
+    connect(webPage, SIGNAL(selectionChanged()),
+            d->browserExtension, SLOT(updateEditActions()));
+    connect(d->browserExtension, SIGNAL(saveUrl(const KUrl&)),
+            webPage, SLOT(saveUrl(const KUrl &)));
+
+    connect(d->webView, SIGNAL(openUrl(const KUrl &)),
+            d->browserExtension, SIGNAL(openUrlRequest(const KUrl &)));
+    connect(d->webView, SIGNAL(openUrlInNewTab(const KUrl &)),
+            d->browserExtension, SIGNAL(createNewWindow(const KUrl &)));
 
     setXMLFile("webkitpart.rc");
     initAction();
@@ -295,9 +303,14 @@ void WebKitPart::initAction()
     actionCollection()->addAction("security", action);
     connect(action, SIGNAL(triggered(bool)), this, SLOT(showSecurity()));
 
-    action = actionCollection()->addAction(KStandardAction::Find, "find", d->webView->searchBar(), SLOT(show()));
+    action = actionCollection()->addAction(KStandardAction::Find, "find", this, SLOT(showSearchBar()));
     action->setWhatsThis(i18n("Find text<br /><br />"
                               "Shows a dialog that allows you to find text on the displayed page."));
+
+    action = actionCollection()->addAction(KStandardAction::FindNext, "findnext",
+                                           d->searchBar, SLOT(findNext()));
+    action = actionCollection()->addAction(KStandardAction::FindPrev, "findprev",
+                                           d->searchBar, SLOT(findPrevious()));
 }
 
 void WebKitPart::guiActivateEvent(KParts::GUIActivateEvent *event)
@@ -336,7 +349,7 @@ bool WebKitPart::openUrl(const KUrl &url)
             if (error == KIO::ERR_USER_CANCELED) {
                 setUrl(d->webView->url());
                 emit d->browserExtension->setLocationBarUrl(KUrl(d->webView->url()).prettyUrl());
-                loadMainPageFinished();
+                navigationRequestFinished();
             } else {
                 QString errorText = mainURL.queryItem( "errText" );
                 urls.pop_front();
@@ -359,8 +372,12 @@ bool WebKitPart::openUrl(const KUrl &url)
         setWindowTitle (url.url());
     } else {
         setUrl(url);
-        d->updateHistory = false;  // Do not update history when url is typed in since konqueror automatically does this itself!
-        d->webView->loadUrl(url, arguments(), browserExtension()->browserArguments());
+        d->updateHistory = false;  // Do not update history when url is typed in since konqueror automatically does this itself!        
+        KParts::OpenUrlArguments args (arguments());
+        KIO::MetaData metaData (args.metaData());
+        WebPage *page = qobject_cast<WebPage*>(d->webView->page());
+        if (page) page->setSslInfo(metaData.toVariant());
+        d->webView->loadUrl(url, args, browserExtension()->browserArguments());
     }
 
     return true;
@@ -372,7 +389,7 @@ bool WebKitPart::closeUrl()
     return true;
 }
 
-WebKitBrowserExtension *WebKitPart::browserExtension() const
+KParts::BrowserExtension *WebKitPart::browserExtension() const
 {
     return d->browserExtension;
 }
@@ -436,12 +453,14 @@ void WebKitPart::loadFinished(bool ok)
 #endif
 }
 
-void  WebKitPart::loadMainPageFinished()
+void  WebKitPart::navigationRequestFinished()
 {
-     if (qobject_cast<WebPage*>(d->webView->page())->isSecurePage())
-        d->browserExtension->setPageSecurity(WebKitPart::WebKitPartPrivate::Encrypted);
-     else
-        d->browserExtension->setPageSecurity(WebKitPart::WebKitPartPrivate::Unencrypted);
+    kDebug();
+    updateHistory();
+    if (qobject_cast<WebPage*>(d->webView->page())->isSecurePage())
+      d->browserExtension->setPageSecurity(WebKitPart::WebKitPartPrivate::Encrypted);
+    else
+      d->browserExtension->setPageSecurity(WebKitPart::WebKitPartPrivate::Unencrypted);
 }
 
 void WebKitPart::loadAborted(const QUrl & url)
@@ -453,9 +472,9 @@ void WebKitPart::loadAborted(const QUrl & url)
       setUrl(d->webView->url());
 }
 
-void WebKitPart::loadError(int errCode, const QString &errStr)
+void WebKitPart::loadError(int errCode, const QString &errStr, const QString &frameName)
 {
-    showError(htmlError(errCode, errStr, url()));
+    showError(htmlError(errCode, errStr, url()), frameName);
 }
 
 void WebKitPart::urlChanged(const QUrl& _url)
@@ -473,7 +492,7 @@ void WebKitPart::showSecurity()
 {
     WebPage* page = qobject_cast<WebPage*>(d->webView->page());
     if (page->isSecurePage()) {
-        KSslInfoDialog *dlg = new KSslInfoDialog(0);
+        QPointer<KSslInfoDialog> dlg = new KSslInfoDialog(0);
         page->setupSslDialog(*dlg);
         dlg->exec();
     } else {
@@ -494,7 +513,7 @@ void WebKitPart::updateHistory(bool enable)
     }
 }
 
-WebView * WebKitPart::view()
+QWebView * WebKitPart::view()
 {
     return d->webView;
 }
@@ -550,11 +569,29 @@ void WebKitPart::linkHovered(const QString &link, const QString &, const QString
     emit setStatusBarText(message);
 }
 
-void WebKitPart::showError(const QString& html)
+void WebKitPart::showError(const QString &html, const QString &frameName)
 {
-    const bool signalsBlocked = d->webView->blockSignals(true);
-    d->webView->setHtml(html);
-    d->webView->blockSignals(signalsBlocked);
+  QWebFrame *frame = 0;
+
+  if (frameName.isEmpty()) {
+      frame = d->webView->page()->mainFrame();
+  } else {
+      QWebFrame *childFrame;
+      QListIterator<QWebFrame*> it (d->webView->page()->mainFrame()->childFrames());
+      while (it.hasNext()) {
+          childFrame = it.next();
+          if (childFrame->frameName() == frameName) {
+              frame = childFrame;
+              break;
+          }
+      }
+  }
+
+  Q_ASSERT (frame);
+
+  const bool signalsBlocked = d->webView->blockSignals(true);
+  frame->setHtml(html);
+  d->webView->blockSignals(signalsBlocked);
 }
 
 void WebKitPart::setWindowTitle(const QString &title)
@@ -565,253 +602,30 @@ void WebKitPart::setWindowTitle(const QString &title)
     emit setWindowCaption(title);
 }
 
-
-WebKitBrowserExtension::WebKitBrowserExtension(WebKitPart *parent)
-                       :KParts::BrowserExtension(parent), part(parent)
+void WebKitPart::searchForText(const QString &text, bool backward)
 {
-    connect(part->view()->page(), SIGNAL(selectionChanged()),
-            this, SLOT(updateEditActions()));
-    connect(part->view(), SIGNAL(openUrl(const KUrl &)),
-            this, SIGNAL(openUrlRequest(const KUrl &)));
-    connect(part->view(), SIGNAL(openUrlInNewTab(const KUrl &)),
-            this, SIGNAL(createNewWindow(const KUrl &)));
+    QWebPage::FindFlags flags;
 
-    enableAction("cut", false);
-    enableAction("copy", false);
-    enableAction("paste", false);
-    enableAction("print", true);
+    if (backward)
+      flags = QWebPage::FindBackward;
+
+    if (d->searchBar->caseSensitive())
+        flags |= QWebPage::FindCaseSensitively;
+
+    kDebug() << text;
+    d->searchBar->setFoundMatch(d->webView->page()->findText(text, flags));
 }
 
-void WebKitBrowserExtension::cut()
+void WebKitPart::showSearchBar()
 {
-    part->view()->page()->triggerAction(KWebPage::Cut);
-}
+    const QString text = d->webView->selectedText();
+    
+    if (text.isEmpty())
+        d->webView->pageAction(QWebPage::Undo);
+    else
+        d->searchBar->setSearchText(text.left(150));
 
-void WebKitBrowserExtension::copy()
-{
-    part->view()->page()->triggerAction(KWebPage::Copy);
-}
-
-void WebKitBrowserExtension::paste()
-{
-    part->view()->page()->triggerAction(KWebPage::Paste);
-}
-
-void WebKitBrowserExtension::slotSaveDocument()
-{
-    qobject_cast<WebPage*>(part->view()->page())->saveUrl(part->view()->url());
-}
-
-void WebKitBrowserExtension::slotSaveFrame()
-{
-    qobject_cast<WebPage*>(part->view()->page())->saveUrl(part->view()->page()->currentFrame()->url());
-}
-
-void WebKitBrowserExtension::print()
-{
-    QPrintPreviewDialog dlg(part->view());
-    connect(&dlg, SIGNAL(paintRequested(QPrinter *)),
-            part->view(), SLOT(print(QPrinter *)));
-    dlg.exec();
-}
-
-void WebKitBrowserExtension::printFrame()
-{
-    QPrintPreviewDialog dlg(part->view());
-    connect(&dlg, SIGNAL(paintRequested(QPrinter *)),
-            part->view()->page()->currentFrame(), SLOT(print(QPrinter *)));
-    dlg.exec();
-}
-
-void WebKitBrowserExtension::updateEditActions()
-{
-    KWebPage *page = part->view()->page();
-    enableAction("cut", page->action(KWebPage::Cut));
-    enableAction("copy", page->action(KWebPage::Copy));
-    enableAction("paste", page->action(KWebPage::Paste));
-}
-
-void WebKitBrowserExtension::searchProvider()
-{
-    // action name is of form "previewProvider[<searchproviderprefix>:]"
-    const QString searchProviderPrefix = QString(sender()->objectName()).mid(14);
-
-    const QString text = part->view()->page()->selectedText();
-    KUriFilterData data;
-    QStringList list;
-    data.setData(searchProviderPrefix + text);
-    list << "kurisearchfilter" << "kuriikwsfilter";
-
-    if (!KUriFilter::self()->filterUri(data, list)) {
-        KDesktopFile file("services", "searchproviders/google.desktop");
-        const QString encodedSearchTerm = QUrl::toPercentEncoding(text);
-        KConfigGroup cg(file.desktopGroup());
-        data.setData(cg.readEntry("Query").replace("\\{@}", encodedSearchTerm));
-    }
-
-    KParts::BrowserArguments browserArgs;
-    browserArgs.frameName = "_blank";
-
-    emit openUrlRequest(data.uri(), KParts::OpenUrlArguments(), browserArgs);
-}
-
-void WebKitBrowserExtension::reparseConfiguration()
-{
-  // Force the configuration stuff to repase...
-  WebKitSettings::self()->init();
-}
-
-void WebKitBrowserExtension::zoomIn()
-{
-#if QT_VERSION >= 0x040500
-    part->view()->setZoomFactor(part->view()->zoomFactor() + 0.1);
-#else
-    part->view()->setTextSizeMultiplier(part->view()->textSizeMultiplier() + 0.1);
-#endif
-}
-
-void WebKitBrowserExtension::zoomOut()
-{
-#if QT_VERSION >= 0x040500
-    part->view()->setZoomFactor(part->view()->zoomFactor() - 0.1);
-#else
-    part->view()->setTextSizeMultiplier(part->view()->textSizeMultiplier() - 0.1);
-#endif
-}
-
-void WebKitBrowserExtension::zoomNormal()
-{
-#if QT_VERSION >= 0x040500
-    part->view()->setZoomFactor(1);
-#else
-    part->view()->setTextSizeMultiplier(1);
-#endif
-}
-
-void WebKitBrowserExtension::toogleZoomTextOnly()
-{
-#if QT_VERSION >= 0x040500
-    KConfigGroup cgHtml(KGlobal::config(), "HTML Settings");
-    bool zoomTextOnly = cgHtml.readEntry( "ZoomTextOnly", false );
-    cgHtml.writeEntry("ZoomTextOnly", !zoomTextOnly);
-    KGlobal::config()->reparseConfiguration();
-
-    part->view()->settings()->setAttribute(QWebSettings::ZoomTextOnly, !zoomTextOnly);
-#endif
-}
-
-void WebKitBrowserExtension::slotSelectAll()
-{
-#if QT_VERSION >= 0x040500
-    part->view()->page()->triggerAction(KWebPage::SelectAll);
-#endif
-}
-
-void WebKitBrowserExtension::slotFrameInWindow()
-{
-    KParts::OpenUrlArguments args;// = d->m_khtml->arguments();
-    args.metaData()["referrer"] = part->view()->contextMenuResult().linkText();
-    args.metaData()["forcenewwindow"] = "true";
-    emit createNewWindow(part->view()->contextMenuResult().linkUrl(), args);
-}
-
-void WebKitBrowserExtension::slotFrameInTab()
-{
-    KParts::OpenUrlArguments args;// = d->m_khtml->arguments();
-    args.metaData()["referrer"] = part->view()->contextMenuResult().linkText();
-    KParts::BrowserArguments browserArgs;//( d->m_khtml->browserExtension()->browserArguments() );
-    browserArgs.setNewTab(true);
-    emit createNewWindow(part->view()->contextMenuResult().linkUrl(), args, browserArgs);
-}
-
-void WebKitBrowserExtension::slotFrameInTop()
-{
-    KParts::OpenUrlArguments args;// = d->m_khtml->arguments();
-    args.metaData()["referrer"] = part->view()->contextMenuResult().linkText();
-    KParts::BrowserArguments browserArgs;//( d->m_khtml->browserExtension()->browserArguments() );
-    browserArgs.frameName = "_top";
-    emit openUrlRequest(part->view()->contextMenuResult().linkUrl(), args, browserArgs);
-}
-
-void WebKitBrowserExtension::slotSaveImageAs()
-{
-    QList<KUrl> urls;
-    urls.append(part->view()->contextMenuResult().imageUrl());
-    const int nbUrls = urls.count();
-    for (int i = 0; i != nbUrls; i++) {
-        QString file = KFileDialog::getSaveFileName(KUrl(), QString(), part->widget());
-        KIO::NetAccess::file_copy(urls.at(i), file, part->widget());
-    }
-}
-
-void WebKitBrowserExtension::slotSendImage()
-{
-    QStringList urls;
-    urls.append(part->view()->contextMenuResult().imageUrl().path());
-    const QString subject = part->view()->contextMenuResult().imageUrl().path();
-    KToolInvocation::invokeMailer(QString(), QString(), QString(), subject,
-                                  QString(), //body
-                                  QString(),
-                                  urls); // attachments
-}
-
-void WebKitBrowserExtension::slotCopyImage()
-{
-    KUrl safeURL(part->view()->contextMenuResult().imageUrl());
-    safeURL.setPass(QString());
-
-    // Set it in both the mouse selection and in the clipboard
-    QMimeData* mimeData = new QMimeData;
-    mimeData->setImageData(part->view()->contextMenuResult().pixmap());
-    safeURL.populateMimeData(mimeData);
-    QApplication::clipboard()->setMimeData(mimeData, QClipboard::Clipboard);
-
-    mimeData = new QMimeData;
-    mimeData->setImageData(part->view()->contextMenuResult().pixmap());
-    safeURL.populateMimeData(mimeData);
-    QApplication::clipboard()->setMimeData(mimeData, QClipboard::Selection);
-}
-
-void WebKitBrowserExtension::slotCopyLinkLocation()
-{
-    KUrl safeURL(part->view()->contextMenuResult().linkUrl());
-    safeURL.setPass(QString());
-    // Set it in both the mouse selection and in the clipboard
-    QMimeData* mimeData = new QMimeData;
-    safeURL.populateMimeData(mimeData);
-    QApplication::clipboard()->setMimeData(mimeData, QClipboard::Clipboard);
-
-    mimeData = new QMimeData;
-    safeURL.populateMimeData(mimeData);
-    QApplication::clipboard()->setMimeData(mimeData, QClipboard::Selection);
-}
-
-void WebKitBrowserExtension::slotSaveLinkAs()
-{
-    qobject_cast<WebPage*>(part->view()->page())->saveUrl(part->view()->contextMenuResult().linkUrl());
-}
-
-void WebKitBrowserExtension::slotViewDocumentSource()
-{
-    //TODO test http requests
-    KUrl currentUrl(part->view()->page()->mainFrame()->url());
-    bool isTempFile = false;
-#if 0
-    if (!(currentUrl.isLocalFile())/* && KHTMLPageCache::self()->isComplete(d->m_cacheId)*/) { //TODO implement
-        KTemporaryFile sourceFile;
-//         sourceFile.setSuffix(defaultExtension());
-        sourceFile.setAutoRemove(false);
-        if (sourceFile.open()) {
-//             QDataStream stream (&sourceFile);
-//             KHTMLPageCache::self()->saveData(d->m_cacheId, &stream);
-            currentUrl = KUrl();
-            currentUrl.setPath(sourceFile.fileName());
-            isTempFile = true;
-        }
-    }
-#endif
-
-    KRun::runUrl(currentUrl, QL1("text/plain"), part->view(), isTempFile);
+    d->searchBar->show();
 }
 
 #include "webkitpart.moc"

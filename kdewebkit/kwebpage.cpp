@@ -23,30 +23,34 @@
  *
  */
 
+// Own
 #include "kwebpage.h"
+
+// Local
 #include "kwebview.h"
-
+#include "networkaccessmanager_p.h"
+#include "knetworkcookiejar.h"
 #include "kwebpluginfactory.h"
-#include "settings/webkitsettings.h"
 
-#include <KDE/KParts/GenericFactory>
-#include <KDE/KParts/BrowserRun>
-#include <KDE/KAction>
-#include <KDE/KFileDialog>
-#include <KDE/KInputDialog>
-#include <KDE/KMessageBox>
-#include <KDE/KProtocolManager>
-#include <KDE/KJobUiDelegate>
-#include <KDE/KRun>
-#include <KDE/KShell>
-#include <KDE/KStandardDirs>
-#include <KDE/KStandardShortcut>
-#include <KIO/Job>
-#include <KDE/KUrl>
-#include <KIO/AccessManager>
+// KDE
+#include <kaction.h>
+#include <kfiledialog.h>
+#include <kinputdialog.h>
+#include <kmessagebox.h>
+#include <kprotocolmanager.h>
+#include <kjobuidelegate.h>
+#include <krun.h>
+#include <kshell.h>
+#include <kstandarddirs.h>
+#include <kstandardshortcut.h>
+#include <kurl.h>
+#include <kdebug.h>
+#include <klocalizedstring.h>
+#include <kparts/browserrun.h>
+#include <kio/accessmanager.h>
+#include <kio/job.h>
 
-#include <QtCore/QPair>
-#include <QtCore/QPointer>
+// Qt
 #include <QtGui/QTextDocument>
 #include <QtGui/QPaintEngine>
 #include <QtWebKit/QWebFrame>
@@ -57,137 +61,21 @@
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusReply>
 
-
-/* Null network reply */
-class NullNetworkReply : public QNetworkReply
-{
-public:
-    NullNetworkReply() {
-        setHeader(QNetworkRequest::ContentLengthHeader, 0);
-        setHeader(QNetworkRequest::ContentTypeHeader, "text/plain");
-        QTimer::singleShot(0, this, SIGNAL(finished()));
-    }
-    virtual void abort() {}
-    virtual qint64 bytesAvailable() const {
-        return 0;
-    }
-protected:
-    virtual qint64 readData(char* data, qint64) {
-        qMemCopy(data, "\0", 1); return 0;
-    }
-};
-
-/* Re-implementation of QNetworkAccessManager for integration with KIO. */
-class NetworkAccessManager : public KIO::AccessManager
-{
-public:
-    NetworkAccessManager(QObject *parent) : KIO::AccessManager(parent) {}
-    KIO::MetaData& sessionMetaData() {
-        return m_sessionMetaData;
-    }
-
-    KIO::MetaData& requestMetaData() {
-        return m_requestMetaData;
-    }
-
-protected:
-    virtual QNetworkReply *createRequest(Operation op, const QNetworkRequest &req, QIODevice *outgoingData = 0) {
-
-        if (WebKitSettings::self()->isAdFilterEnabled() && WebKitSettings::self()->isAdFiltered(req.url().toString())) {
-            kDebug() << "*** AD FILTER BLOCKED => " << req.url();
-            return new NullNetworkReply();
-        }
-
-        QNetworkRequest request(req);
-        KIO::MetaData metaData = m_sessionMetaData;
-        metaData += m_requestMetaData;
-
-        QVariant attr = req.attribute(QNetworkRequest::User);
-        if (attr.isValid() && attr.type() == QVariant::Map) {
-            metaData += attr.toMap();
-        }
-
-        if (!metaData.isEmpty()) {
-            attr = metaData.toVariant();
-            request.setAttribute(QNetworkRequest::User, attr);
-        }
-
-        // Clear the per request meta data...
-        m_requestMetaData.clear();
-        return KIO::AccessManager::createRequest(op, request, outgoingData);
-    }
-private:
-    KIO::MetaData m_sessionMetaData;
-    KIO::MetaData m_requestMetaData;
-};
-
-/* Re-implementation of QNetworkCookieJar for integration with KCookieJar */
-class CookieJar : public QNetworkCookieJar
-{
-public:
-    CookieJar(QObject* parent = 0) : QNetworkCookieJar(parent), m_windowId(-1) {}
-    virtual ~CookieJar() {}
-
-    virtual QList<QNetworkCookie> cookiesForUrl(const QUrl & url) const {
-        QList<QNetworkCookie> cookieList;
-
-        if (WebKitSettings::self()->isCookieJarEnabled()) {
-            QDBusInterface kcookiejar("org.kde.kded", "/modules/kcookiejar", "org.kde.KCookieServer");
-            QDBusReply<QString> reply = kcookiejar.call("findDOMCookies", url.toString(), m_windowId);
-
-            if (reply.isValid()) {
-                cookieList << reply.value().toUtf8();
-                //kDebug() << url.host() << reply.value();
-            } else {
-                kWarning() << "Unable to communicate with the cookiejar!";
-            }
-        }
-
-        return cookieList;
-    }
-
-    virtual bool setCookiesFromUrl(const QList<QNetworkCookie> & cookieList, const QUrl & url) {
-
-        if (WebKitSettings::self()->isCookieJarEnabled()) {
-            QDBusInterface kcookiejar("org.kde.kded", "/modules/kcookiejar", "org.kde.KCookieServer");
-
-            QByteArray cookieHeader;
-            Q_FOREACH(const QNetworkCookie& cookie, cookieList) {
-                cookieHeader = "Set-Cookie: ";
-                cookieHeader += cookie.toRawForm();
-                kcookiejar.call("addCookies", url.toString(), cookieHeader, m_windowId);
-                //kDebug() << "url: " << url.host() << ", cookie: " << cookieHeader;
-            }
-
-            return !kcookiejar.lastError().isValid();
-        }
-
-        return false;
-    }
-
-    void setWindowId(qlonglong id) {
-        m_windowId = id;
-    }
-
-private:
-    qlonglong m_windowId;
-};
+#define QL1(x)  QLatin1String(x)
 
 class KWebPage::KWebPagePrivate
 {
 public:
     KWebPagePrivate() {}
-
-    QString getFileNameForDownload(const QNetworkRequest &request, QNetworkReply *reply) const;
-    QPointer<NetworkAccessManager> accessManager;
+    static QString getFileNameForDownload(const QNetworkRequest &request, QNetworkReply *reply);
 };
 
-QString KWebPage::KWebPagePrivate::getFileNameForDownload(const QNetworkRequest &request, QNetworkReply *reply) const
+QString KWebPage::KWebPagePrivate::getFileNameForDownload(const QNetworkRequest &request, QNetworkReply *reply)
 {
     QString fileName = KUrl(request.url()).fileName();
     if (reply && reply->hasRawHeader("Content-Disposition")) { // based on code from arora, downloadmanger.cpp
-        const QString value = QLatin1String(reply->rawHeader("Content-Disposition"));
-        const int pos = value.indexOf(QLatin1String("filename="));
+        const QString value = QL1(reply->rawHeader("Content-Disposition"));
+        const int pos = value.indexOf(QL1("filename="));
         if (pos != -1) {
             QString name = value.mid(pos + 9);
             if (name.startsWith(QLatin1Char('"')) && name.endsWith(QLatin1Char('"')))
@@ -199,25 +87,20 @@ QString KWebPage::KWebPagePrivate::getFileNameForDownload(const QNetworkRequest 
 }
 
 KWebPage::KWebPage(QObject *parent)
-        : QWebPage(parent), d(new KWebPage::KWebPagePrivate())
-{
-    d->accessManager = new NetworkAccessManager(this);
-    setNetworkAccessManager(d->accessManager);
+         :QWebPage(parent), d(new KWebPage::KWebPagePrivate())
+{  
+    // KDE KParts integration for <embed> tag...
+    setPluginFactory(new KWebPluginFactory(this));
 
-    CookieJar* cookiejar = new CookieJar(this);
-    KWebView * webView = qobject_cast<KWebView*>(view());
+    // KDE IO (KIO) integration...
+    setNetworkAccessManager(new KDEPrivate::NetworkAccessManager(this));
 
-    if (webView) {
-        const qlonglong winId = webView->window()->winId();
-        cookiejar->setWindowId(winId);
-        d->accessManager->sessionMetaData().insert("window-id", QString::number(winId));
-    }
-
-    d->accessManager->setCookieJar(cookiejar);
-
-    // TODO: Determine if and for what our own KParts implementation
-    // of QWebPluginFactory is necessary...
-    //setPluginFactory(new KWebPluginFactory(pluginFactory(), this));
+    // KDE Cookiejar (KCookieJar) integration...
+    qlonglong windowId = view()->window()->winId();
+    KNetworkCookieJar *cookiejar = new KNetworkCookieJar;
+    cookiejar->setWindowId(windowId);
+    networkAccessManager()->setCookieJar(cookiejar);
+    setSessionMetaData(QL1("window-id"), QString::number(windowId));
 
     action(Back)->setIcon(KIcon("go-previous"));
     action(Back)->setShortcut(KStandardShortcut::back().primary());
@@ -262,17 +145,12 @@ KWebPage::KWebPage(QObject *parent)
     settings()->setWebGraphic(QWebSettings::MissingImageGraphic, KIcon("image-missing").pixmap(32, 32));
     settings()->setWebGraphic(QWebSettings::DefaultFrameIconGraphic, KIcon("applications-internet").pixmap(32, 32));
 
-    if (webView)
-        WebKitSettings::self()->computeFontSizes(webView->logicalDpiY());
-
-    //const QString host = mainFrame()->url().host();
-
     setForwardUnsupportedContent(true);
 
     connect(this, SIGNAL(downloadRequested(const QNetworkRequest &)),
-            this, SLOT(slotDownloadRequested(const QNetworkRequest &)));
+            this, SLOT(slotDownloadRequest(const QNetworkRequest &)));
     connect(this, SIGNAL(unsupportedContent(QNetworkReply *)),
-            this, SLOT(slotHandleUnsupportedContent(QNetworkReply *)));
+            this, SLOT(slotUnsupportedContent(QNetworkReply *)));
 }
 
 KWebPage::~KWebPage()
@@ -282,12 +160,31 @@ KWebPage::~KWebPage()
 
 void KWebPage::setAllowExternalContent(bool allow)
 {
-    d->accessManager->setExternalContentAllowed(allow);
+    KIO::AccessManager *manager = qobject_cast<KIO::AccessManager*>(networkAccessManager());
+    if (manager)
+        manager->setExternalContentAllowed(allow);
 }
 
 bool KWebPage::isExternalContentAllowed() const
 {
-    return d->accessManager->isExternalContentAllowed();
+    KIO::AccessManager *manager = qobject_cast<KIO::AccessManager*>(networkAccessManager());
+    if (manager)
+        return manager->isExternalContentAllowed();
+    return true;
+}
+
+void KWebPage::setSessionMetaData(const QString &key, const QString &value)
+{
+    KDEPrivate::NetworkAccessManager *manager = qobject_cast<KDEPrivate::NetworkAccessManager*>(networkAccessManager());
+    if (manager)
+        manager->sessionMetaData()[key] = value;
+}
+
+void KWebPage::setRequestMetaData(const QString &key, const QString &value)
+{
+    KDEPrivate::NetworkAccessManager *manager = qobject_cast<KDEPrivate::NetworkAccessManager*>(networkAccessManager());
+    if (manager)
+        manager->requestMetaData()[key] = value;
 }
 
 QString KWebPage::chooseFile(QWebFrame *frame, const QString &suggestedFile)
@@ -342,35 +239,19 @@ QString KWebPage::userAgentForUrl(const QUrl& _url) const
     return userAgent;
 }
 
-void KWebPage::setSessionMetaData(const QString& key, const QString& value)
-{
-    Q_ASSERT(d->accessManager);
-    d->accessManager->sessionMetaData()[key] = value;
-}
-
-void KWebPage::setRequestMetaData(const QString& key, const QString& value)
-{
-    Q_ASSERT(d->accessManager);
-    d->accessManager->requestMetaData()[key] = value;
-}
-
 bool KWebPage::acceptNavigationRequest(QWebFrame * frame, const QNetworkRequest & request, NavigationType type)
 {
     kDebug() << "url: " << request.url() << ", type: " << type << ", frame: " << frame;   
-    /*
-      QWebPage calls acceptNavigationRequest when:
-        ** a load url operation is requested... (e.g. user types in the url)
-        ** a link on a web page is clicked...
-        ** a "location.href" javascript command is executed...
-        ** a load url operation is requested from a frame within the main frame...
 
-        If the navigation request is from the main frame, set the cross-domain meta-data
-        value to the current url when for proper integration with KCookieJar...
+    /*
+      If the navigation request is from the main frame, set the cross-domain
+      meta-data value to the current url for proper integration with KCookieJar...
     */
-    if (frame && frame == mainFrame()) {
-        QUrl url(request.url());
-        if (url.host().toLower() != QString::fromUtf8("blank")) {
-            d->accessManager->sessionMetaData()["cross-domain"] = url.toString();
+    if (frame == mainFrame()) {
+        const QString scheme = request.url().scheme();
+        if (QString::compare(QString::fromUtf8("about"), scheme, Qt::CaseInsensitive) != 0 &&
+            QString::compare(QString::fromUtf8("file"), scheme, Qt::CaseInsensitive) != 0) {
+            setSessionMetaData(QL1("cross-domain"), request.url().toString());
         }
     }
 
@@ -388,7 +269,12 @@ QObject *KWebPage::createPlugin(const QString &classId, const QUrl &url, const Q
     return loader.createWidget(classId, view());
 }
 
-void KWebPage::slotHandleUnsupportedContent(QNetworkReply *reply)
+bool KWebPage::authorizedRequest(const QUrl &) const
+{
+    return true;
+}
+
+void KWebPage::slotUnsupportedContent(QNetworkReply *reply)
 {
     kDebug() << "url:" << reply->url();
     kDebug() << "location:" << reply->header(QNetworkRequest::LocationHeader).toString();
@@ -401,7 +287,7 @@ void KWebPage::slotHandleUnsupportedContent(QNetworkReply *reply)
                                                     d->getFileNameForDownload(reply->request(), reply));
         switch (res) {
         case KParts::BrowserRun::Save:
-            slotDownloadRequested(reply->request(), reply);
+            slotDownloadRequest(reply->request(), reply);
             return;
         case KParts::BrowserRun::Cancel:
             return;
@@ -411,12 +297,12 @@ void KWebPage::slotHandleUnsupportedContent(QNetworkReply *reply)
     }
 }
 
-void KWebPage::slotDownloadRequested(const QNetworkRequest &request)
+void KWebPage::slotDownloadRequest(const QNetworkRequest &request)
 {
-    slotDownloadRequested(request, 0);
+    slotDownloadRequest(request, 0);
 }
 
-void KWebPage::slotDownloadRequested(const QNetworkRequest &request, QNetworkReply *reply)
+void KWebPage::slotDownloadRequest(const QNetworkRequest &request, QNetworkReply *reply)
 {
     const KUrl url(request.url());
     kDebug() << url;
@@ -465,15 +351,4 @@ void KWebPage::slotDownloadRequested(const QNetworkRequest &request, QNetworkRep
         job->addMetaData("cache", "cache"); // Use entry from cache if available.
         job->uiDelegate()->setAutoErrorHandlingEnabled(true);
     }
-}
-
-KWebPage *KWebPage::createWindow(WebWindowType type)
-{
-    return newWindow(type);
-}
-
-KWebPage *KWebPage::newWindow(WebWindowType type)
-{
-    Q_UNUSED(type);
-    return 0;
 }

@@ -23,6 +23,11 @@ function statusMessage()
     window.status = 'A new status message.';
 }
 
+function openWindow()
+{
+    window.open("http://kde.org/");
+}
+
 </script>
 </head>
 <body>
@@ -34,5 +39,6 @@ document.writeln("navigator.appVersion: " + navigator.appVersion + "<br />");
 <a href="javascript:move()">moveTo</a><br />
 <a href="javascript:promptAndAlertMessage()">promptAndAlertMessage</a><br />
 <a href="javascript:statusMessage()">status</a><br />
+<a href="javascript:openWindow()">new window</a><br />
 </body>
 </html>
