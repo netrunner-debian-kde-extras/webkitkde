@@ -19,8 +19,8 @@
  * Boston, MA 02110-1301, USA.
  *
  */
-#ifndef KWEBPAGESSLINFO_H
-#define KWEBPAGESSLINFO_H
+#ifndef WEBSSLINFO_H
+#define WEBSSLINFO_H
 
 #include <kdemacros.h>
 
@@ -29,6 +29,8 @@
 #include <QtCore/QString>
 #include <QtNetwork/QHostAddress>
 #include <QtNetwork/QSslCertificate>
+
+namespace KDEPrivate {
 
 class WebSslInfo
 {
@@ -50,7 +52,8 @@ public:
 
   WebSslInfo& operator = (const WebSslInfo&);
 
-protected:
+  void fromMetaData (const QVariant &);
+
   void reset();
 
   void setUrl (const QUrl &url);
@@ -67,5 +70,5 @@ private:
   class WebSslInfoPrivate;
   WebSslInfoPrivate* d;
 };
-
-#endif 
+}
+#endif // WEBSSLINFO_H
