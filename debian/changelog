@@ -1,3 +1,10 @@
+webkitkde (0.0.20091020svn1037794-1) unstable; urgency=low
+
+  * New upstream snapshot
+    - adds scrolling to right place after going back in history
+
+ -- Adrian von Bidder <cmot@debian.org>  Tue, 20 Oct 2009 16:31:08 +0200
+
 webkitkde (0.0.20091013svn1034519-1) unstable; urgency=low
 
   * New upstream snapshot
