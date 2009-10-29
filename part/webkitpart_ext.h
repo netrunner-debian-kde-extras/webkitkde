@@ -37,9 +37,6 @@ public:
     WebKitBrowserExtension(WebKitPart *parent);
     ~WebKitBrowserExtension();
 
-  virtual int xOffset();
-  virtual int yOffset();
-
   virtual void saveState( QDataStream &);
   virtual void restoreState( QDataStream &);
 
@@ -70,6 +67,7 @@ public Q_SLOTS:
     void slotSaveImageAs();
     void slotSendImage();
     void slotCopyImage();
+    void slotViewImage();
 
     void slotCopyLinkLocation();
     void slotSaveLinkAs();
