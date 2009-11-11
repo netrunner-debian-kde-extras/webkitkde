@@ -23,6 +23,8 @@
 #include "webkitpart_ext.h"
 
 #include "webview.h"
+#include "webpage.h"
+#include "websslinfo.h"
 #include "webkitpart.h"
 #include "settings/webkitsettings.h"
 
@@ -45,11 +47,29 @@
 #include <QtWebKit/QWebFrame>
 
 
+static QStringList getChildrenFrameState(const QWebFrame *frame)
+{
+    QStringList info;
+    if (frame) {
+        QListIterator <QWebFrame*> it (frame->childFrames());
+        while (it.hasNext()) {
+            QWebFrame* childFrame = it.next();
+            info << childFrame->frameName();
+            info << childFrame->url().toString();
+            info << QString::number(childFrame->scrollPosition().x());
+            info << QString::number(childFrame->scrollPosition().y());
+        }
+    }
+
+    return info;
+}
+
 class WebKitBrowserExtension::WebKitBrowserExtensionPrivate
 {
  public:
     QPointer<WebKitPart> part;
     QPointer<WebView> view;
+
 };
 
 WebKitBrowserExtension::WebKitBrowserExtension(WebKitPart *parent)
@@ -70,23 +90,67 @@ WebKitBrowserExtension::~WebKitBrowserExtension()
     delete d;
 }
 
+int WebKitBrowserExtension::xOffset()
+{
+    if (d->view->page())
+        return d->view->page()->mainFrame()->scrollPosition().x();
+
+    return KParts::BrowserExtension::xOffset();
+}
+
+int WebKitBrowserExtension::yOffset()
+{
+    if (d->view->page())
+        return d->view->page()->mainFrame()->scrollPosition().y();
+
+    return KParts::BrowserExtension::yOffset();
+}
+
 void WebKitBrowserExtension::saveState(QDataStream &stream)
 {
-    stream << d->part->url() << (qint32)xOffset() << (qint32)yOffset();
+    QVariant sslinfo, historyData;
+    QStringList childFrameState;
+
+    if (d->view) {
+        WebPage *page = qobject_cast<WebPage*>(d->view->page());
+
+        if (page) {
+            // Save the SSL information...
+            sslinfo = page->sslInfo().toMetaData();
+
+            // Save the state (name, url, scroll position) for all frames...
+            childFrameState = getChildrenFrameState(page->mainFrame());
+        }
+    }
+
+    stream << d->part->url()
+           << static_cast<qint32>(xOffset())
+           << static_cast<qint32>(yOffset())
+           << sslinfo
+           << childFrameState;
 }
 
 void WebKitBrowserExtension::restoreState(QDataStream &stream)
 {  
     KUrl u;
     qint32 xOfs, yOfs;
-    stream >> u >> xOfs >> yOfs;
-
+    QVariant sslinfo;
+    KIO::MetaData metaData;
     KParts::OpenUrlArguments args;
+    KParts::BrowserArguments bargs;
+
+    stream >> u >> xOfs >> yOfs >> sslinfo >> bargs.docState;
+
+    if (sslinfo.isValid() && sslinfo.type() == QVariant::Map)
+        metaData += sslinfo.toMap();
+
     args.setXOffset(xOfs);
     args.setYOffset(yOfs);
-    args.metaData().insert("restore-state", QString());
+    args.metaData() = metaData;
+    args.metaData().insert(QLatin1String("webkitpart-restore-state"), QString());
 
     d->part->setArguments(args);
+    d->part->browserExtension()->setBrowserArguments(bargs);
     d->part->openUrl(u);
 }
 
@@ -238,9 +302,9 @@ void WebKitBrowserExtension::slotFrameInWindow()
 {
     if (d->view) {
         KParts::OpenUrlArguments args;// = d->m_khtml->arguments();
-        args.metaData()["referrer"] = d->view->contextMenuResult().linkText();
+        args.metaData()["referrer"] = d->view->url().toString();
         args.metaData()["forcenewwindow"] = "true";
-        emit createNewWindow(d->view->contextMenuResult().linkUrl(), args);
+        emit createNewWindow(d->view->page()->currentFrame()->url(), args);
     }
 }
 
@@ -248,10 +312,10 @@ void WebKitBrowserExtension::slotFrameInTab()
 {
     if (d->view) {
         KParts::OpenUrlArguments args;// = d->m_khtml->arguments();
-        args.metaData()["referrer"] = d->view->contextMenuResult().linkText();
+        args.metaData()["referrer"] = d->view->url().toString();
         KParts::BrowserArguments browserArgs;//( d->m_khtml->browserExtension()->browserArguments() );
         browserArgs.setNewTab(true);
-        emit createNewWindow(d->view->contextMenuResult().linkUrl(), args, browserArgs);
+        emit createNewWindow(d->view->page()->currentFrame()->url(), args, browserArgs);
     }
 }
 
@@ -259,10 +323,17 @@ void WebKitBrowserExtension::slotFrameInTop()
 {
     if (d->view) {
         KParts::OpenUrlArguments args;// = d->m_khtml->arguments();
-        args.metaData()["referrer"] = d->view->contextMenuResult().linkText();
+        args.metaData()["referrer"] = d->view->url().toString();
         KParts::BrowserArguments browserArgs;//( d->m_khtml->browserExtension()->browserArguments() );
         browserArgs.frameName = "_top";
-        emit openUrlRequest(d->view->contextMenuResult().linkUrl(), args, browserArgs);
+        emit openUrlRequest(d->view->page()->currentFrame()->url(), args, browserArgs);
+    }
+}
+
+void WebKitBrowserExtension::slotReloadFrame()
+{
+    if (d->view) {
+        d->view->page()->currentFrame()->load(d->view->page()->currentFrame()->url());
     }
 }
 
@@ -364,6 +435,13 @@ void WebKitBrowserExtension::slotViewDocumentSource()
     #endif
 
         KRun::runUrl(currentUrl, QLatin1String("text/plain"), d->view, isTempFile);
+    }
+}
+
+void WebKitBrowserExtension::slotViewFrameSource()
+{
+    if (d->view) {
+        KRun::runUrl(KUrl(d->view->page()->currentFrame()->url()), QLatin1String("text/plain"), d->view, false);
     }
 }
 
