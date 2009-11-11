@@ -1,3 +1,10 @@
+webkitkde (0.0.20091109svn1046903-1) unstable; urgency=low
+
+  * New upstream snapshot
+    - fix at least one crash
+
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 11 Nov 2009 10:21:46 +0100
+
 webkitkde (0.0.20091031svn1043455-1) unstable; urgency=low
 
   * New upstream snapshot
