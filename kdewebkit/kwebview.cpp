@@ -52,10 +52,11 @@ public:
 };
 
 
-KWebView::KWebView(QWidget *parent)
+KWebView::KWebView(QWidget *parent, bool createCustomPage)
          :QWebView(parent), d(new KWebView::KWebViewPrivate())
 {
-    setPage(new KWebPage(this));
+    if (createCustomPage)
+        setPage(new KWebPage(this));
 }
 
 KWebView::~KWebView()
@@ -99,38 +100,38 @@ void KWebView::mousePressEvent(QMouseEvent *event)
 }
 
 void KWebView::mouseReleaseEvent(QMouseEvent *event)
-{  
-
+{
     const QWebHitTestResult result = page()->mainFrame()->hitTestContent(event->pos());
     const QUrl url = result.linkUrl();
 
     if (url.isValid() && !url.isEmpty() && !url.scheme().isEmpty()) {
         if ((d->pressedButtons & Qt::MidButton) ||
             ((d->pressedButtons & Qt::LeftButton) && (d->keyboardModifiers & Qt::ControlModifier))) {
-          emit openUrlInNewWindow(url);
+          emit linkMiddleOrCtrlClicked(url);
           return;
         }
 
        if ((d->pressedButtons & Qt::LeftButton) && (d->keyboardModifiers & Qt::ShiftModifier)) {
-          emit saveUrl(url);
+          emit linkShiftClicked(url);
           return;
         }
     }
 
+    // Let the page handle the event first so that middle clicking on scroll
+    // bars does not result in navigation to url from the selection clipboard.
     const bool isAccepted = event->isAccepted();
     page()->event(event);
 
     if (!event->isAccepted()) {
         // Navigate to url in clipboard on middle mouse button click on the page...
-        if (!isModified() && (d->pressedButtons & Qt::MidButton)) {
+        if (!isModified() && !result.isContentEditable() && (d->pressedButtons & Qt::MidButton)) {
             QString clipboardText(QApplication::clipboard()->text(QClipboard::Selection).trimmed());
             if (KUriFilter::self()->filterUri(clipboardText, QStringList() << "kshorturifilter")) {
                 kDebug() << "Navigating to" << clipboardText;
-                emit openUrl(KUrl(clipboardText));
+                emit selectionClipboardUrlPasted(KUrl(clipboardText));
             }
         }
     }
 
     event->setAccepted(isAccepted);
-    QWebView::mouseReleaseEvent(event);
 }
