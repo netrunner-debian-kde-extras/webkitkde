@@ -36,6 +36,7 @@
 #include <KDE/KCmdLineArgs>
 #include <KDE/KDebug>
 #include <KDE/KIO/AccessManager>
+#include <kurifilter.h>
 
 #include <QtUiTools/QUiLoader>
 #include <QtWebKit/QWebPage>
@@ -45,9 +46,10 @@
 
 #if QT_VERSION >= 0x040600
 #include <QtWebKit/QWebElement>
+#include <QtWebKit/QWebElementCollection>
 #endif
 
-#if QT_VERSION >= 0x040400 && !defined(QT_NO_PRINTER)
+#if !defined(QT_NO_PRINTER)
 #include <QtGui/QPrintPreviewDialog>
 #endif
 
@@ -87,11 +89,7 @@ public:
 
         setupUI();
 
-#if QT_VERSION >= 0x040600
-        QUrl qurl = view->guessUrlFromString(url);
-#else
-        QUrl qurl(url);
-#endif
+        QUrl qurl(KUriFilter::self()->filteredUri(url, QStringList() << "kshorturifilter"));
         if (qurl.isValid()) {
             urlEdit->setText(qurl.toEncoded());
             view->load(qurl);
@@ -114,15 +112,7 @@ public:
 protected slots:
 
     void changeLocation() {
-        QString string = urlEdit->text();
-#if QT_VERSION >= 0x040600
-        QUrl url = view->guessUrlFromString(string);
-#else
-        QUrl url(string);
-#endif
-        if (url.isRelative())
-            url = QUrl("http://" + string + "/");
-        urlEdit->setText(url.toEncoded());
+        QUrl url (KUriFilter::self()->filteredUri(urlEdit->text(), QStringList() << "kshorturifilter"));
         view->load(url);
         view->setFocus(Qt::OtherFocusReason);
     }
@@ -182,7 +172,7 @@ protected slots:
     }
 
     void print() {
-#if QT_VERSION >= 0x040400 && !defined(QT_NO_PRINTER)
+#if !defined(QT_NO_PRINTER)
         QPrintPreviewDialog dlg(this);
         connect(&dlg, SIGNAL(paintRequested(QPrinter *)),
                 view, SLOT(print(QPrinter *)));
@@ -205,10 +195,10 @@ protected slots:
                                             QLineEdit::Normal, "a", &ok);
         if (ok && !str.isEmpty()) {
 #if QT_VERSION >= 0x040600
-            QList<QWebElement> result =  view->page()->mainFrame()->findAllElements(str);
+            QWebElementCollection result =  view->page()->mainFrame()->findAllElements(str);
             foreach (QWebElement e, result)
                 e.setStyleProperty("background-color", "yellow");
-            statusBar()->showMessage(i18n("%1 element(s) selected",result.count()), 5000);
+            statusBar()->showMessage(i18np("%1 element selected","%1 elements selected",result.count()), 5000);
 #endif
         }
     }
@@ -255,9 +245,8 @@ private:
 
         QMenu *fileMenu = menuBar()->addMenu(i18n("&File"));
         QAction *newWindow = fileMenu->addAction(i18n("New Window"), this, SLOT(newWindow()));
-#if QT_VERSION >= 0x040400
+
         fileMenu->addAction(i18n("Print"), this, SLOT(print()));
-#endif
         fileMenu->addAction(i18n("Close"), this, SLOT(close()));
 
         QMenu *editMenu = menuBar()->addMenu(i18n("&Edit"));
