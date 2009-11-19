@@ -1,3 +1,10 @@
+webkitkde (0.0.20091118svn1050980-1) unstable; urgency=low
+
+  * New upstream snapshot
+    - early version of KWallet integration
+
+ -- Adrian von Bidder <cmot@debian.org>  Thu, 19 Nov 2009 11:51:38 +0100
+
 webkitkde (0.0.20091109svn1046903-1) unstable; urgency=low
 
   * New upstream snapshot
