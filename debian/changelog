@@ -1,3 +1,11 @@
+webkitkde (0.0.XXXXXXXXsvnXXXXXXX-1) unstable; urgency=low
+
+  * New upstream snapshot
+    - fix compilation with gold (closes: 556675)
+      (since r1052400)
+
+ -- Adrian von Bidder <cmot@debian.org>  Sat, 21 Nov 2009 16:27:27 +0100
+
 webkitkde (0.0.20091118svn1050980-1) unstable; urgency=low
 
   * New upstream snapshot
