@@ -14,8 +14,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, libkwebkit1 (= ${binary:Version})
 Description: WebKit KPart
  A Plug-In for the Konqueror web browser and other KDE applications allowing
  the WebKit HTML renderer to be used instead of the traditional KHTML.
- .
- NOTE: This is highy experimental software and may not work as well as expected.
 
 Package: libkwebkit1
 Architecture: any

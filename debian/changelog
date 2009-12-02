@@ -1,3 +1,9 @@
+webkitkde (0.0.xxxxxxxxsvnxxxxxxx-1) unstable; urgency=low
+
+  * Let it migrate to testing normally (closes: #537226)
+
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 02 Dec 2009 12:19:24 +0100
+
 webkitkde (0.0.20091202svn1057402-1) unstable; urgency=low
 
   * New upstream snapshot
