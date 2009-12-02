@@ -43,7 +43,7 @@ Package: libkwebkit-dbg
 Architecture: any
 Priority: extra
 Section: debug
-Depends: libwebkitkde1 (= ${binary:Version}), kdelibs5-dbg
+Depends: libkwebkit1 (= ${binary:Version}), kdelibs5-dbg
 Conflicts: libwebkitkde-dbg
 Replaces: libwebkitkde-dbg
 Description: KDE bindings for WebKit, Development files
