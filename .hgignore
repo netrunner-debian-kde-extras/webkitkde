@@ -7,7 +7,7 @@ debian/.*\.debhelper.log$
 debian/.*\.postinst.debhelper$
 debian/.*\.postrm.debhelper$
 debian/.*\.substvars$
-debian/libwebkitkde1/
-debian/libwebkitkde-dbg/
-debian/libwebkitkde-dev/
+debian/libkwebkit1/
+debian/libkwebkit-dbg/
+debian/libkwebkit-dev/
 debian/tmp/
