@@ -5,48 +5,64 @@ find_package(KDE4 REQUIRED)
 include(KDE4Defaults)
 include(MacroLibrary)
 
-find_package(KdeWebKit REQUIRED)
+if(${KDE_VERSION} VERSION_LESS 4.3.74)
+    find_package(KdeWebKit REQUIRED)
+endif(${KDE_VERSION} VERSION_LESS 4.3.74)
 
-include_directories(${KDE4_INCLUDES} ${KDEWEBKIT_INCLUDE_DIR} ${CMAKE_SOURCE_DIR})
+include_directories(${KDE4_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/..)
+if(${KDE_VERSION} VERSION_LESS 4.3.74)
+    include_directories(${KDEWEBKIT_INCLUDE_DIR})
+endif(${KDE_VERSION} VERSION_LESS 4.3.74)
 add_definitions(${QT_DEFINITIONS} ${KDE4_DEFINITIONS})
 
 add_subdirectory(cmake)
 add_subdirectory(includes)
 
-set(webkitkde_LIB_SRCS
+set(kwebkit_LIB_SRCS
     webkitpart.cpp
     webkitpart_ext.cpp
     webview.cpp
     webpage.cpp
     websslinfo.cpp
+    networkaccessmanager.cpp
     ui/searchbar.cpp
     settings/webkitsettings.cpp
     settings/khtml_filter.cpp
 )
 
-kde4_add_ui_files(webkitkde_LIB_SRCS
+kde4_add_ui_files(kwebkit_LIB_SRCS
     ui/searchbar.ui
 )
 
-kde4_add_library(webkitkde SHARED ${webkitkde_LIB_SRCS})
+kde4_add_library(kwebkit SHARED ${kwebkit_LIB_SRCS})
 
-target_link_libraries(webkitkde ${KDEWEBKIT_LIBRARIES} ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY} ${QT_QTUITOOLS_LIBRARY})
+target_link_libraries(kwebkit ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY} ${QT_QTUITOOLS_LIBRARY})
+if(${KDE_VERSION} VERSION_LESS 4.3.74)
+    target_link_libraries(kwebkit ${KDEWEBKIT_LIBRARIES})
+else(${KDE_VERSION} VERSION_LESS 4.3.74)
+    target_link_libraries(kwebkit ${KDE4_KDEWEBKIT_LIBS})
+endif(${KDE_VERSION} VERSION_LESS 4.3.74)
 
-set_target_properties(webkitkde PROPERTIES VERSION 1.0.0 SOVERSION 1)
+set_target_properties(kwebkit PROPERTIES VERSION 1.0.0 SOVERSION 1)
 
-install(TARGETS webkitkde ${INSTALL_TARGETS_DEFAULT_ARGS})
+install(TARGETS kwebkit ${INSTALL_TARGETS_DEFAULT_ARGS})
 
 
-kde4_add_plugin(webkitkdepart webkitpartfactory.cpp)
+kde4_add_plugin(kwebkitpart webkitpartfactory.cpp)
 
-target_link_libraries(webkitkdepart webkitkde ${KDEWEBKIT_LIBRARIES} ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY})
+target_link_libraries(kwebkitpart kwebkit ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY})
+if(${KDE_VERSION} VERSION_LESS 4.3.74)
+    target_link_libraries(kwebkit ${KDEWEBKIT_LIBRARIES})
+else(${KDE_VERSION} VERSION_LESS 4.3.74)
+    target_link_libraries(kwebkit ${KDE4_KDEWEBKIT_LIBS})
+endif(${KDE_VERSION} VERSION_LESS 4.3.74)
 
 install(FILES
-    webkitkde_export.h
-    webkitpart.h
-    DESTINATION ${INCLUDE_INSTALL_DIR}/webkitkde/ COMPONENT Devel)
+        webkitkde_export.h
+        webkitpart.h
+        DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
 
-install(TARGETS webkitkdepart DESTINATION ${PLUGIN_INSTALL_DIR})
+install(TARGETS kwebkitpart DESTINATION ${PLUGIN_INSTALL_DIR})
 
 install(FILES webkitpart.desktop DESTINATION ${SERVICES_INSTALL_DIR})
 

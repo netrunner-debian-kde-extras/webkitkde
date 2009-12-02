@@ -28,6 +28,7 @@
 #include "websslinfo.h"
 #include "webview.h"
 #include "sslinfodialog_p.h"
+#include "networkaccessmanager.h"
 #include "settings/webkitsettings.h"
 
 #include <KDE/KParts/GenericFactory>
@@ -180,9 +181,17 @@ public:
 };
 
 WebPage::WebPage(WebKitPart *part, QWidget *parent)
-        :KWebPage(parent), d (new WebPagePrivate)
+        :KWebPage(parent, (KWebPage::KPartsIntegration|KWebPage::KWalletIntegration)),
+         d (new WebPagePrivate)
 {
     d->part = part;
+
+    // Set our own internal cookie manager...
+    KDEPrivate::MyNetworkAccessManager *manager = new KDEPrivate::MyNetworkAccessManager(this);
+    if (parent && parent->window())
+        manager->setCookieJarWindowId(parent->window()->winId());
+    setNetworkAccessManager(manager);
+
     setSessionMetaData("ssl_activate_warnings", "TRUE");
 
     // Set font sizes accordingly...
@@ -198,7 +207,7 @@ WebPage::WebPage(WebKitPart *part, QWidget *parent)
     connect(this, SIGNAL(statusBarMessage(const QString &)),
             this, SLOT(slotStatusBarMessage(const QString &)));
     connect(this, SIGNAL(downloadRequested(const QNetworkRequest &)),
-            this, SLOT(slotDownloadRequest(const QNetworkRequest &)));
+            this, SLOT(downloadRequest(const QNetworkRequest &)));
     connect(this, SIGNAL(unsupportedContent(QNetworkReply *)),
             this, SLOT(slotUnsupportedContent(QNetworkReply *)));
     connect(networkAccessManager(), SIGNAL(finished(QNetworkReply *)),
@@ -208,12 +217,6 @@ WebPage::WebPage(WebKitPart *part, QWidget *parent)
 WebPage::~WebPage()
 {
     delete d;
-}
-
-bool WebPage::authorizedRequest(const QUrl &url) const
-{
-    // Check for ad filtering...
-    return !(WebKitSettings::self()->isAdFilterEnabled() && WebKitSettings::self()->isAdFiltered(url.toString()));
 }
 
 const WebSslInfo& WebPage::sslInfo() const
@@ -271,11 +274,6 @@ void WebPage::restoreAllFrameState()
     }
 }
 
-void WebPage::saveUrl(const KUrl &url)
-{
-    slotDownloadRequest(QNetworkRequest(url));
-}
-
 bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &request, NavigationType type)
 {
     // Handle "mailto:" url here...
@@ -283,16 +281,8 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
       return false;
 
     if (frame) {
-        /*
-          NOTE: QtWebKit sends NavigationTypeOther instead of NavigationTypeLink
-          or when users click on javascript links such as
-
-          <a href="javascript:location.href='http://qt.nokia.com'">javascript link</a>
-        */
-
-        // inPage requests are those generarted within the current page
-        // through link clicks, javascript queries, and button clicks
-        // (form submission).
+        // inPage requests are those generarted within the current page through
+        // link clicks, javascript queries, and button clicks (form submission).
         bool inPageRequest = true;
 
         switch (type) {
@@ -304,14 +294,30 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
             case QWebPage::NavigationTypeReload:
             case QWebPage::NavigationTypeBackOrForward:
                 inPageRequest = false;
+                break;
             case QWebPage::NavigationTypeOther:
-                // Set manual request user typed request...
-                inPageRequest = (d->part->url() != request.url());
+                /*
+                  NOTE: Unfortunately QtWebKit sends a NavigationTypeOther
+                  when users click on links that use javascript. For example,
+
+                  <a href="javascript:location.href='http://qt.nokia.com'">javascript link</a>
+
+                  This completely screws up the link security checks we attempt
+                  to do below. There is currently no reliable way to discern link
+                  clicks from other requests that are sent as NavigationTypeOther!
+                  Perhaps a new type, NavigationTypeJavascript, will be added in
+                  the future to QtWebKit ??!?
+                */
+                //if (d->part->url() == request.url())
+                inPageRequest = false;
+
+                // The following code does proper history navigation for
+                // websites that are composed of frames.
                 if (frame != mainFrame() && d->frameStateContainer.contains(frame->frameName())) {
                     WebFrameState frameState = d->frameStateContainer.value(frame->frameName());
                     if (frameState.url != request.url()) {
                         frame->setUrl(frameState.url);
-                        kDebug() << "Changing request for" << frame->frameName() << "to" << frameState.url;
+                        kDebug() << "Changing request from" << frame->frameName() << "to" << frameState.url;
                         return false;
                     }
                 }
@@ -383,7 +389,7 @@ void WebPage::slotUnsupportedContent(QNetworkReply *reply)
     emit d->part->browserExtension()->openUrlRequest(url, args, KParts::BrowserArguments());
 }
 
-void WebPage::slotDownloadRequest(const QNetworkRequest &request)
+void WebPage::downloadRequest(const QNetworkRequest &request)
 {
     const KUrl url(request.url());
     kDebug() << url;
@@ -492,8 +498,8 @@ void WebPage::slotRequestFinished(QNetworkReply *reply)
         QWebFrame* frame = d->requestQueue.take(url);
         const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        if (statusCode > 300 && statusCode < 304) {            
-            kDebug() << "Redirected to " << reply->url();
+        if (statusCode > 300 && statusCode < 304) {
+            kDebug() << "Redirected to" << reply->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
         } else {
             const int errCode = convertErrorCode(reply);
             const bool isMainFrameRequest = (frame == mainFrame());
@@ -553,6 +559,8 @@ bool WebPage::checkLinkSecurity(const QNetworkRequest &req, NavigationType type)
 {
     // Check whether the request is authorized or not...
     if (!KAuthorized::authorizeUrlAction("redirect", mainFrame()->url(), req.url())) {
+
+        kDebug() << "*** Failed security check: base-url=" << mainFrame()->url() << ", dest-url=" << req.url();
         QString buttonText, title, message;
 
         int response = KMessageBox::Cancel;
@@ -598,7 +606,7 @@ bool WebPage::checkFormData(const QNetworkRequest &req) const
                                                 "A third party may be able to "
                                                 "intercept and view this "
                                                 "information.\nAre you sure you "
-                                                "wish to continue?"),
+                                                "want to send the data unencrypted?"),
                                            i18n("Network Transmission"),
                                            KGuiItem(i18n("&Send Unencrypted")))  == KMessageBox::Cancel)) {
 

@@ -24,15 +24,14 @@
  */
 
 #include "webkitpart.h"
-#include "webkitpart_ext.h"
 
+#include "webkitpart_ext.h"
 #include "webview.h"
 #include "webpage.h"
 #include "websslinfo.h"
-
 #include "sslinfodialog_p.h"
-
-#include <ui/searchbar.h>
+#include "ui/searchbar.h"
+#include "settings/webkitsettings.h"
 
 #include <KDE/KParts/GenericFactory>
 #include <KDE/KParts/Plugin>
@@ -46,6 +45,7 @@
 #include <KDE/KGlobal>
 #include <KDE/KStringHandler>
 #include <kio/global.h>
+#include <kdewebkit/kwebwallet.h>
 
 #include <QtCore/QUrl>
 #include <QtCore/QFile>
@@ -194,7 +194,7 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
     lay->setSpacing(0);
 
     // Add the WebView...
-    d->webView = new WebView (this, mainWidget); 
+    d->webView = new WebView (this, mainWidget);
     lay->addWidget(d->webView);
     connect(d->webView, SIGNAL(titleChanged(const QString &)),
             this, SIGNAL(setWindowCaption(const QString &)));
@@ -203,7 +203,7 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
     connect(d->webView, SIGNAL(urlChanged(const QUrl &)),
             this, SLOT(urlChanged(const QUrl &)));
     connect(d->webView, SIGNAL(linkMiddleOrCtrlClicked(const KUrl &)),
-            this, SLOT(openUrlInNewTab(const KUrl &)));
+            this, SLOT(slotLinkMiddleOrCtrlClicked(const KUrl &)));
 
     // Add the search bar...
     d->searchBar = new KDEPrivate::SearchBar;
@@ -227,7 +227,7 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
     connect(d->webPage, SIGNAL(jsStatusBarMessage(const QString &)),
             this, SIGNAL(setStatusBarText(const QString &)));
     connect(d->webView, SIGNAL(linkShiftClicked(const KUrl &)),
-            d->webPage, SLOT(saveUrl(const KUrl &)));
+            d->webPage, SLOT(downloadUrl(const KUrl &)));
 
     d->browserExtension = new WebKitBrowserExtension(this);
     connect(d->webPage, SIGNAL(loadProgress(int)),
@@ -235,7 +235,7 @@ WebKitPart::WebKitPart(QWidget *parentWidget, QObject *parent, const QStringList
     connect(d->webPage, SIGNAL(selectionChanged()),
             d->browserExtension, SLOT(updateEditActions()));
     connect(d->browserExtension, SIGNAL(saveUrl(const KUrl&)),
-            d->webPage, SLOT(saveUrl(const KUrl &)));
+            d->webPage, SLOT(downloadUrl(const KUrl &)));
 
     connect(d->webView, SIGNAL(selectionClipboardUrlPasted(const KUrl &)),
             d->browserExtension, SIGNAL(openUrlRequest(const KUrl &)));
@@ -423,6 +423,12 @@ void WebKitPart::loadFinished(bool ok)
             // text documents...
             urlChanged(d->webView->url());
         }
+
+        // TODO: Add check for sites exempt from automatic form filling...
+        kDebug() << WebKitSettings::self()->isFormCompletionEnabled();
+        if (WebKitSettings::self()->isFormCompletionEnabled() && d->webPage->wallet()) {
+            d->webPage->wallet()->fillFormData(d->webPage->mainFrame());
+        }
     }
 
     /*
@@ -457,7 +463,7 @@ void WebKitPart::loadFinished(bool ok)
 }
 
 void WebKitPart::loadAborted(const KUrl & url)
-{  
+{
     closeUrl();
     if (url.isValid())
       emit d->browserExtension->openUrlRequest(url);
@@ -467,8 +473,6 @@ void WebKitPart::loadAborted(const KUrl & url)
 
 void  WebKitPart::navigationRequestFinished(const KUrl& url, QWebFrame *frame)
 {
-    kDebug() << url << frame;
-
     if (frame) {
 
         if (handleError(url, frame)) {
@@ -485,7 +489,7 @@ void  WebKitPart::navigationRequestFinished(const KUrl& url, QWebFrame *frame)
 }
 
 void WebKitPart::urlChanged(const QUrl& _url)
-{  
+{
     if (_url != QUrl("about:blank")) {
         setUrl(_url);
         emit d->browserExtension->setLocationBarUrl(KUrl(_url).prettyUrl());
@@ -515,7 +519,6 @@ void WebKitPart::showSecurity()
 void WebKitPart::saveFrameState(QWebFrame *frame, QWebHistoryItem *item)
 {
     Q_UNUSED (item);
-    kDebug() << "update history ?" << d->updateHistory << ", main frame ?" << (d->webPage->mainFrame() == frame);
     if (!frame->parentFrame() && d->updateHistory) {
         emit d->browserExtension->openUrlNotify();
     }
@@ -627,7 +630,7 @@ void WebKitPart::searchForText(const QString &text, bool backward)
 void WebKitPart::showSearchBar()
 {
     const QString text = d->webView->selectedText();
-    
+
     if (text.isEmpty())
         d->webView->pageAction(QWebPage::Undo);
     else
@@ -636,14 +639,13 @@ void WebKitPart::showSearchBar()
     d->searchBar->show();
 }
 
-void WebKitPart::openUrlInNewTab(const KUrl& linkUrl)
+void WebKitPart::slotLinkMiddleOrCtrlClicked(const KUrl& linkUrl)
 {
     KParts::OpenUrlArguments args;
+    args.setActionRequestedByUser(true);
     args.metaData()["referrer"] = url().url();
 
     KParts::BrowserArguments bargs;
-    bargs.setNewTab(true);
-
     emit browserExtension()->createNewWindow(linkUrl, args, bargs);
 }
 
