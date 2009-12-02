@@ -24,12 +24,18 @@
 
 #include <kdewebkit_export.h>
 
+#include <kurl.h>
+
 #include <QtCore/QObject>
+#include <QtCore/QString>
+#include <QtCore/QList>
+#include <QtCore/QPair>
+#include <QtGui/QWidget>
 #include <QtGlobal>
 
 class QWebFrame;
 class QWebPage;
-class QUrl;
+
 
 /**
  * @short A class that provides KWallet integration for QtWebKit.
@@ -42,18 +48,35 @@ class KDEWEBKIT_EXPORT KWebWallet : public QObject
     Q_OBJECT
 
 public:
+
     /**
-     * Flags that determine how form data is saved to the wallet.
+     * Structure to hold data from HTML <form> element.
+     *
+     * @p url    holds the origination url of a form.
+     * @p name   holds the name attribute of a form.
+     * @p index  holds the order of a form on a web page.
+     * @p fields holds the name and value attributes of each <input> in a form.
      */
-    enum SaveType {
-      Synchronous=0,
-      Asynchronous
+    struct WebForm
+    {
+       /**
+        * A typedef for storing the name and value attributes of HTML <input>
+        * elements.
+        */
+        typedef QPair<QString, QString> WebField;
+
+        QUrl url;
+        QString name;
+        QString index;
+        QList<WebField> fields;
     };
+
+    typedef QList<WebForm> WebFormList;
 
     /**
      * Constructs a KWebWallet with @p parent as its parent.
      */
-    explicit KWebWallet(QObject* parent = 0);
+    explicit KWebWallet(QObject* parent = 0, WId wid = 0);
 
     /**
      * Destructor
@@ -61,79 +84,195 @@ public:
     virtual ~KWebWallet();
 
     /**
-     * Save the form data from @p frame.
+     * Returns a list of forms in @p frame that have cached data in the
+     * peristent storage.
      *
-     * If @p type is set to Asynchronous, the default, then this function will
-     * not block during the saving process. Instead it queues the data to be
-     * saved and emits @ref saveFormDataRequested. The queued form data will
-     * then be sent to the wallet for permanent storage if and only if the
-     * @ref confirmSaveFormDataRequest slot is invoked with the appropriate key.
-     * To determine whether or not the save request succeeded, you must connect
-     * to the @ref saveFormDataCompleted signal.
+     * If @p recursive is set to true, the default, then this function will
+     * will also return the cached form data for all the children frames of
+     * @p frame.
      *
-     * If @p type is Synchronous, this function will block until the data is
-     * saved and return the appropriate status.
+     * If the site currently rendered in @p frame does not contain any forms
+     * or there is not cached data for the forms found in @p frame, then this
+     * function will return an empty list.
      *
-     * @param frame   the frame from which the form data is saved.
-     * @param type    if Asynchronous, the default, this function will not
-     *                block while saving form data.
-     *
-     * @return true on success or when @p type it Asynchronous, false otherwise.
+     * Note that this function will only return the information about the forms
+     * in @p frame and not their cached data, i.e. the fields member variable in
+     * the returned @ref WebForm list will always be empty.
      */
-    bool saveFormData(QWebFrame *frame, SaveType type = Asynchronous);
+    WebFormList formsWithCachedData(QWebFrame* frame, bool recursive = true) const;
+
+    /**
+     * Attempts to save the form data from @p frame and its children frames.
+     *
+     * If @p recursive is set to true, the default, then form data from all
+     * the child frames of @p frame will be saved. Set @p ignorePasswordFields
+     * to true if you do not want data from password fields to not be saved.
+     *
+     * You must connect to the @ref saveFormDataRequested signal and call either
+     * @ref rejectSaveFormDataRequest or @ref acceptSaveFormDataRequest signals
+     * in order to complete the save request. Otherwise, you request will simply
+     * be ignored.
+     */
+    void saveFormData(QWebFrame *frame, bool recursive = true, bool ignorePasswordFields = false);
+
+    /**
+     * Attempts to fill forms contained in @p frame with cached data.
+     *
+     * If @p recursive is set to true, the default, then this function will
+     * attempt to fill out forms in the specified frame and all its children
+     * frames.
+     */
+    void fillFormData(QWebFrame *frame, bool recursive = true);
+
+    /**
+     * Removes the form data specified by @p forms from the persistent storage.
+     *
+     * This function is provided for convenience and simply calls @ref formsWithCachedData
+     * and @ref removeFormData. Note that this function will remove all cached
+     * data for forms found in @p frame. If @p recursive is set to true, then
+     * all cached data for all of the child frames of @p frame will be removed
+     * from the persistent storage as well.
+     *
+     * @see formsWithCachedData
+     * @see removeFormData
+     */
+    void removeFormData (QWebFrame *frame, bool recursive);
+
+    /**
+     * Removes the form data specified by @p forms from the persistent storage.
+     *
+     * Call @ref formsWithCachedData to obtain a list of forms with data cached
+     * in persistent storage.
+     *
+     * @see formsWithCachedData
+     */
+    void removeFormData(const WebFormList &forms);
 
 public Q_SLOTS:
     /**
-     * Restores the form data for @p frame.
+     * Accepts the save form data request associated with @p key.
      *
-     * @param frame the web frame for which data should be restored.
-     * @return true if form data was sucessfully restored.
+     * The @p key parameter is the one sent through the @ref saveFormDataRequested
+     * signal.
+     *
+     * You must always call this function or @ref rejectSaveFormDataRequest in
+     * order to complete the save form data request. Otherwise, the request will
+     * simply be ignored.
+     *
+     * @see saveFormDataRequested.
      */
-    void restoreFormData(QWebFrame *frame);
+    void acceptSaveFormDataRequest(const QString &key);
 
     /**
-     * Confirms the form data to be saved to
+     * Rejects the save form data request associated with @p key.
      *
-     * @param key the token provided through the @ref saveFormDataRequested signal.
-     * @return true if form data was sucessfully restored.
+     * The @p key parameter is the one sent through the @ref saveFormDataRequested
+     * signal.
+     *
+     * @see saveFormDataRequested.
      */
-    void confirmSaveFormDataRequest(const QString &key);
+    void rejectSaveFormDataRequest(const QString &key);
 
 Q_SIGNALS:
     /**
-     * This signal is emitted as notification of a pending form data save request.
+     * This signal is emitted whenever a save form data request is received.
      *
-     * This signal is only sent for Asynchronous save requests and requires that you
-     * call @ref confirmSaveFormDataRequest aftewards to commit the data to the wallet.
+     * Unless you connect to this signal and and call the
+     * @ref acceptSaveFormDataRequest or @ref rejectSaveFormDataRequest slots,
+     * the save request will never be acted upon.
      *
-     * @see confirmSaveFormDataRequest
+     * @p key is a value that uniquely identifies the save request and @p url
+     * is the address for which the form data is being saved.
+     *
+     * @see acceptSaveFormDataRequest
+     * @see rejectSaveFormDataRequest
      */
     void saveFormDataRequested(const QString &key, const QUrl &url);
 
     /**
-     * This signal is emitted when a form data save request is completed.
-     * @p ok will indicate whether or not the save request for @p url was
+     * This signal is emitted whenever a save form data request is completed.
+     *
+     * @p ok will be set to true if the save form data request for @p url was
      * completed successfully.
      *
-     * Note that this signal is only emitted if the request was Asynchronous.
-     * See @ref saveFormData for details.
+     * @see saveFormDataRequested
      */
     void saveFormDataCompleted(const QUrl &url, bool ok);
 
 protected:
     /**
-     * Saves the form data information in @p frame to KDE's wallet.
+     * Returns a list of forms for @p url that are waiting to be filled.
+     *
+     * This function returns an empty list if there is no pending requests
+     * for filling forms associated with @p url.
      */
-    virtual void doSaveFormData(QWebFrame *frame);
+    WebFormList formsToFill(const KUrl &url) const;
 
     /**
-     * Restores form data from KDE's wallet to @ frame.
+     * Returns a list of for @p key that are waiting to be saved.
+     *
+     * This function returns an empty list if there are no pending requests
+     * for saving forms associated with @p key.
      */
-    virtual void doRestoreFormData(QWebFrame *frame);
+    WebFormList formsToSave(const QString &key) const;
+
+    /**
+     * Returns forms to be removed from persistent storage.
+     */
+    WebFormList formsToDelete() const;
+
+    /**
+     * Returns true when there is data associated with @p form in the
+     * persistent storage.
+     */
+    virtual bool hasCachedFormData(const WebForm &form) const;
+
+    /**
+     * Fills the web forms in frame that point to @p url with data from @p forms.
+     *
+     * @see fillFormDataFromCache.
+     */
+    void fillWebForm(const KUrl &url, const WebFormList &forms);
+
+    /**
+     * Fills form data from persistent storage.
+     *
+     * If you reimplement this function, call @ref formsToFill to obtain
+     * the list of forms pending to be filled. Once you fill the list with
+     * the cached data from the persistent storage, you must call @p fillWebForm
+     * to fill out the actual web forms.
+     *
+     * @see formsToFill
+     */
+    virtual void fillFormDataFromCache(const KUrl::List &list);
+
+    /**
+     * Stores form data associated with @p key to a persistent storage.
+     *
+     * If you reimplement this function, call @ref formsToSave to obtain the
+     * list of form data pending to be saved to persistent storage.
+     *
+     *@see formsToSave
+     */
+    virtual void saveFormDataToCache(const QString &key);
+
+    /**
+     * Removes all cached form data associated with @p forms from persistent storage.
+     *
+     * If you reimplement this function, call @ref formsToDelete to obtain the
+     * list of form data pending to be removed from persistent storage.
+     *
+     *@see formsToDelete
+     */
+    virtual void removeFormDataFromCache(const WebFormList &forms);
 
 private:
     class KWebWalletPrivate;
+    friend class KWebWalletPrivate;
     KWebWalletPrivate * const d;
+    
+
+    Q_PRIVATE_SLOT(d, void _k_openWalletDone(bool))
 };
 
 #endif // KWEBWALLET_H

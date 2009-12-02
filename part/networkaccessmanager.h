@@ -1,9 +1,6 @@
 /*
  * This file is part of the KDE project.
  *
- * Copyright (C) 2008 Laurent Montel <montel@kde.org>
- * Copyright 2008 Benjamin C. Meyer <ben@meyerhome.net>
- * Copyright (C) 2008 Urs Wolfer <uwolfer @ kde.org>
  * Copyright (C) 2009 Dawit Alemayehu <adawit @ kde.org>
  *
  * This library is free software; you can redistribute it and/or
@@ -20,50 +17,41 @@
  * along with this library; see the file COPYING.LIB.  If not, write to
  * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
  * Boston, MA 02110-1301, USA.
+ *
  */
+#ifndef NETWORKACCESSMANAGER_H
+#define NETWORKACCESSMANAGER_H
 
-#ifndef SEARCHBAR_P_H
-#define SEARCHBAR_P_H
+#include <kdeversion.h>
 
-#include <QtGui/QWidget>
+#if KDE_IS_VERSION(4,3,73)
+#include <kio/accessmanager.h>
+typedef KIO::AccessManager AccessManagerBase;
+#else
+#include "kdewebkit/networkaccessmanager_p.h"
+typedef KDEPrivate::NetworkAccessManager AccessManagerBase;
+#endif
 
 namespace KDEPrivate {
 
-/**
- * This is the widget that shows up when the search is initiated.
- */
-class SearchBar : public QWidget
+ /**
+  * Re-implemented for internal reasons. API remains unaffected.
+  */
+class MyNetworkAccessManager : public AccessManagerBase
 {
-    Q_OBJECT
-
 public:
-    SearchBar(QWidget *parent = 0);
-    ~SearchBar();
+    MyNetworkAccessManager(QObject *parent = 0);
 
-    QString searchText() const;
-    bool caseSensitive() const;
-    void setFoundMatch(bool match);
-    void setSearchText(const QString&);
-
-public Q_SLOTS:
-    void show();
-    void hide();
-    void clear();
-    void findNext();
-    void findPrevious();
-
-Q_SIGNALS:
-    void searchTextChanged(const QString& text, bool backward = false);
-
-private Q_SLOTS:
-    void searchAsYouTypeChanged(bool);
-
-private:
-    class SearchBarPrivate;
-    SearchBarPrivate * const d;
-
+protected:
+    /**
+     * Reimplemented for internal reasons, the API is not affected.
+     *
+     * @see KIO::AccessManager::createRequest.
+     * @internal
+     */
+    virtual QNetworkReply *createRequest(Operation op, const QNetworkRequest &req, QIODevice *outgoingData = 0);
 };
 
 }
 
-#endif // SEARCHBAR_P_H
+#endif // NETWORKACCESSMANAGER_P_H
