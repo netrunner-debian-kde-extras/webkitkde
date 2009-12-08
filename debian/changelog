@@ -1,8 +1,12 @@
-webkitkde (0.0.xxxxxxxxsvnxxxxxxx-1) unstable; urgency=low
+webkitkde (0.4svn1059630-1) unstable; urgency=low
 
   * Let it migrate to testing normally (closes: #537226)
+  * New upstream snapshot
+    - there is a version number hidden in part/webkitpart.cpp
+    - KWallet integration
+    - fix a few crashes
 
- -- Adrian von Bidder <cmot@debian.org>  Wed, 02 Dec 2009 12:19:24 +0100
+ -- Adrian von Bidder <cmot@debian.org>  Tue, 08 Dec 2009 12:39:06 +0100
 
 webkitkde (0.0.20091202svn1057402-1) unstable; urgency=low
 
