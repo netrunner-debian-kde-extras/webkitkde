@@ -91,6 +91,8 @@ KWebWallet::KWebWalletPrivate::KWebWalletPrivate(KWebWallet *parent)
 
 KWebWallet::WebFormList KWebWallet::KWebWalletPrivate::parseFormData(QWebFrame *frame, bool fillform, bool ignorepasswd)
 {
+    Q_ASSERT (frame);
+
     KWebWallet::WebFormList list;
     const QString fileName = (fillform ? QL1S(":/resources/parseFormNames.js"):QL1S(":/resources/parseForms.js"));
     QFile file(fileName);
@@ -247,12 +249,16 @@ KWebWallet::~KWebWallet()
 
 KWebWallet::WebFormList KWebWallet::formsWithCachedData(QWebFrame* frame, bool recursive) const
 {
-    WebFormList list = d->parseFormData(frame);
+    WebFormList list;
 
-    if (recursive) {
-        QListIterator <QWebFrame *> framesIt (frame->childFrames());
-        while (framesIt.hasNext()) {
-            list << d->parseFormData(framesIt.next());
+    if (frame) {
+        list << d->parseFormData(frame);
+
+        if (recursive) {
+            QListIterator <QWebFrame *> framesIt (frame->childFrames());
+            while (framesIt.hasNext()) {
+                list << d->parseFormData(framesIt.next());
+            }
         }
     }
 
@@ -304,24 +310,36 @@ void KWebWallet::fillFormData(QWebFrame *frame, bool recursive)
 
 void KWebWallet::saveFormData(QWebFrame *frame, bool recursive, bool ignorePasswordFields)
 {
-    WebFormList list = d->parseFormData(frame, false, ignorePasswordFields);
-    if (recursive) {
-        QListIterator<QWebFrame*> frameIt (frame->childFrames());
-        while (frameIt.hasNext()) {
-            list << d->parseFormData(frameIt.next(), false, ignorePasswordFields);
+    if (frame) {
+        WebFormList list = d->parseFormData(frame, false, ignorePasswordFields);
+        if (recursive) {
+            QListIterator<QWebFrame*> frameIt (frame->childFrames());
+            while (frameIt.hasNext()) {
+                list << d->parseFormData(frameIt.next(), false, ignorePasswordFields);
+            }
         }
-    }
 
-    if (!list.isEmpty()) {
-        const QString key = QString::number(qHash(frame->url().toString() + frame->frameName()), 16);
-        d->pendingSaveRequests.insert(key, list);
-        emit saveFormDataRequested(key, frame->url());
+        if (!list.isEmpty()) {
+            const QString key = QString::number(qHash(frame->url().toString() + frame->frameName()), 16);
+            d->pendingSaveRequests.insert(key, list);
+
+            for (int i =0 ; i < list.count(); ++i) {
+                if (hasCachedFormData(list.at(i)))
+                    list.takeAt(i);
+            }
+
+            if (list.isEmpty())
+                saveFormDataToCache(key);
+            else
+                emit saveFormDataRequested(key, frame->url());
+        }
     }
 }
 
 void KWebWallet::removeFormData(QWebFrame *frame, bool recursive)
 {
-    removeFormDataFromCache(formsWithCachedData(frame, recursive));
+    if (frame)
+        removeFormDataFromCache(formsWithCachedData(frame, recursive));
 }
 
 void KWebWallet::removeFormData(const WebFormList &forms)
@@ -351,7 +369,6 @@ void KWebWallet::fillWebForm(const KUrl &url, const KWebWallet::WebFormList &for
             if (formName.isEmpty())
                 formName = form.index;
 
-            kDebug() << "Filling out form:" << formName;
             QListIterator<WebForm::WebField> fieldIt (form.fields);
             while (fieldIt.hasNext()) {
                 const WebForm::WebField field = fieldIt.next();
@@ -361,7 +378,6 @@ void KWebWallet::fillWebForm(const KUrl &url, const KWebWallet::WebFormList &for
                                                      "document.forms[\"%1\"].elements[\"%2\"].value=\"%3\";"))
                                        .arg(formName).arg(field.first).arg(escapeValue(field.second));
                 frame->evaluateJavaScript(script);
-                kDebug() << "Executed script:" << script;
             }
         }
     }
