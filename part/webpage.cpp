@@ -24,7 +24,7 @@
 
 #include "webpage.h"
 
-#include "webkitpart.h"
+#include "kwebkitpart.h"
 #include "websslinfo.h"
 #include "webview.h"
 #include "sslinfodialog_p.h"
@@ -174,19 +174,19 @@ public:
     WebPagePrivate() {}
 
     WebSslInfo sslInfo;
-    QMap<QString, WebFrameState> frameStateContainer;
+    QHash<QString, WebFrameState> frameStateContainer;
     // Holds list of requests including those from children frames
-    QMap<QUrl, QWebFrame*> requestQueue;
-    QPointer<WebKitPart> part;
+    QMultiHash<QUrl, QWebFrame*> requestQueue;
+    QPointer<KWebKitPart> part;
 };
 
-WebPage::WebPage(WebKitPart *part, QWidget *parent)
+WebPage::WebPage(KWebKitPart *part, QWidget *parent)
         :KWebPage(parent, (KWebPage::KPartsIntegration|KWebPage::KWalletIntegration)),
          d (new WebPagePrivate)
 {
     d->part = part;
 
-    // Set our own internal cookie manager...
+    // Set our own internal network access manager...
     KDEPrivate::MyNetworkAccessManager *manager = new KDEPrivate::MyNetworkAccessManager(this);
     if (parent && parent->window())
         manager->setCookieJarWindowId(parent->window()->winId());
@@ -276,8 +276,10 @@ void WebPage::restoreAllFrameState()
 
 bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &request, NavigationType type)
 {
+    const QUrl reqUrl (request.url());
+
     // Handle "mailto:" url here...
-    if (handleMailToUrl(request.url(), type))
+    if (handleMailToUrl(reqUrl, type))
       return false;
 
     if (frame) {
@@ -286,8 +288,8 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
         bool inPageRequest = true;
 
         switch (type) {
-            case QWebPage::NavigationTypeFormResubmitted:
             case QWebPage::NavigationTypeFormSubmitted:
+            case QWebPage::NavigationTypeFormResubmitted:
                 if (!checkFormData(request))
                     return false;
                 break;
@@ -308,22 +310,47 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
                   Perhaps a new type, NavigationTypeJavascript, will be added in
                   the future to QtWebKit ??!?
                 */
-                //if (d->part->url() == request.url())
+                //if (d->part->url() == reqUrl)
                 inPageRequest = false;
 
-                // The following code does proper history navigation for websites that are
-                // composed of frames.
-                if (frame != mainFrame() && d->frameStateContainer.contains(frame->frameName())) {
-                    WebFrameState &frameState = d->frameStateContainer[frame->frameName()];
-                    if (!frameState.handled && !frameState.url.isEmpty() &&
-                        frameState.url.toString() != request.url().toString()) {
-                        const bool signalsBlocked = frame->blockSignals(true);
-                        frame->setUrl(frameState.url);
-                        frame->blockSignals(signalsBlocked);
-                        frameState.handled = true;
-                        kDebug() << "Changing request for" << frame << "from"
-                                 << request.url() << "to" << frameState.url;
-                        return false;
+                /*
+                  HACK: It is impossible to marry QtWebKit's history handling
+                  with that of konqueror. They simply do not mix like oil and
+                  water! Anyhow, here we workaround some issues that result
+                  from not being able to use QtWebKit's built-in history
+                  navigation.
+                */
+                if (d->frameStateContainer.contains(frame->frameName())) {
+                    if (frame == mainFrame()) {
+                        // Avoid reloading page when navigating back from an
+                        // anchor or link that points to some place within the
+                        // same page.
+                        const QUrl frameUrl (frame->url());
+                        const bool frmUrlHasFragment = frameUrl.hasFragment();
+                        const bool reqUrlHasFragment = reqUrl.hasFragment();
+
+                        //kDebug() << frame << ", url now:" << frameUrl << ", url requested:" << reqUrl;
+                        if ((frmUrlHasFragment && frameUrl.toString(QUrl::RemoveFragment) == reqUrl.toString()) ||
+                            (reqUrlHasFragment && reqUrl.toString(QUrl::RemoveFragment) == frameUrl.toString()) ||
+                            (frmUrlHasFragment && reqUrlHasFragment && reqUrl == frameUrl)) {
+                            kDebug() << "Avoiding page reload!" << endl;
+                            emit loadFinished(true);
+                            return false;
+                        }
+                    } else {
+                        // The following code does proper history navigation for
+                        // websites that are composed of frames.
+                        WebFrameState &frameState = d->frameStateContainer[frame->frameName()];
+                        if (!frameState.handled && !frameState.url.isEmpty() &&
+                            frameState.url.toString() != reqUrl.toString()) {
+                            const bool signalsBlocked = frame->blockSignals(true);
+                            frame->setUrl(frameState.url);
+                            frame->blockSignals(signalsBlocked);
+                            frameState.handled = true;
+                            kDebug() << "Changing request for" << frame << "from"
+                                     << reqUrl << "to" << frameState.url;
+                            return false;
+                        }
                     }
                 }
                 break;
@@ -361,17 +388,17 @@ QWebPage *WebPage::createWindow(WebWindowType type)
 
     KParts::BrowserArguments bargs;
     bargs.setLockHistory(true);
-    if (type == WebModalDialog)
+    //if (type == WebModalDialog)
         bargs.setForcesNewWindow(true);
 
     d->part->browserExtension()->createNewWindow(KUrl("about:blank"), args, bargs,
                                                  KParts::WindowArgs(), &part);
 
-    WebKitPart *webKitPart = qobject_cast<WebKitPart*>(part);
+    KWebKitPart *webKitPart = qobject_cast<KWebKitPart*>(part);
 
     if (!webKitPart) {
         if (part)
-            kDebug() << "Got a non WebKitPart" << part->metaObject()->className();
+            kDebug() << "Got a non KWebKitPart" << part->metaObject()->className();
         else
             kDebug() << "part is null";
 
