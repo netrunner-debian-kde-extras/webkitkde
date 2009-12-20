@@ -1,3 +1,6 @@
+TODO: document new procedures / write new scripts now that hg-buildpackage
+is not available anymore.
+
 The source of this package is managed by using a hg-buildpackage managed
 mercurial repository at https://fortytwo.ch/hg/pkg-webkitkde.
 
@@ -16,6 +19,9 @@ are set up like this (and as long as care is taken to always import upstream
 on the upstream branch), hg-buildpackage works just fine.
 
 So far, the upstream source is unpatched.
+
+Upstream is at:
+    svn://anonsvn.kde.org/home/kde/trunk/playground/libs/webkitkde
 
 Import a new upstream version:
 (don't use hg-importorig because of #531746)
