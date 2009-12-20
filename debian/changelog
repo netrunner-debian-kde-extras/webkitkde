@@ -1,8 +1,8 @@
-webkitkde (0.4svn1063595-1) unstable; urgency=low
+webkitkde (0.4svn1064329-1) unstable; urgency=low
 
   * New upstream snapshot
 
- -- Adrian von Bidder <cmot@debian.org>  Sat, 19 Dec 2009 14:51:15 +0100
+ -- Adrian von Bidder <cmot@debian.org>  Sun, 20 Dec 2009 17:48:51 +0100
 
 webkitkde (0.4svn1059630-1) unstable; urgency=low
 
