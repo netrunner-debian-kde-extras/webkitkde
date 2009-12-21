@@ -1,22 +1,16 @@
-TODO: document new procedures / write new scripts now that hg-buildpackage
-is not available anymore.
-
-The source of this package is managed by using a hg-buildpackage managed
-mercurial repository at https://fortytwo.ch/hg/pkg-webkitkde.
+The source of this package is managed by using a hgpkg managed
+mercurial repository at https://fortytwo.ch/hg/pkg-webkitkde.  (hgpkg is
+currently included in the debian/ directoriy here and not separately packaged,
+since it's not used anywhere else.)
 
 Typically, you'd start by:
 
- $ hg clone https://fortytwo.ch/hg/pkg-webkitkde webkitkde.upstream
- $ hg clone webkitkde.upstream webkitkde
- $ cd webkitkde.upstream
- $ hg update -C upstream
- $ cd ../webkitkde
- $ hg-buildpackage
+ $ hg clone https://fortytwo.ch/hg/pkg-webkitkde webkitkde
+ $ debian/hgpkg buildfull
 
-To summarize: the repo contains "upstream" and "default" branches, whereas
-hg-buildpackage makes no assumptions about the branches.  But once the dirs
-are set up like this (and as long as care is taken to always import upstream
-on the upstream branch), hg-buildpackage works just fine.
+Description: the repository contains an "upstream" and a "default" branch;
+"upstream" is directly imported from upstream's svn, and the default branch
+contains the directory as it is to be packed by dpkg-source.
 
 So far, the upstream source is unpatched.
 
@@ -24,18 +18,18 @@ Upstream is at:
     svn://anonsvn.kde.org/home/kde/trunk/playground/libs/webkitkde
 
 Import a new upstream version:
-(don't use hg-importorig because of #531746)
 
- $ cd webkitkde.upstream
- $ rm -rf *
- $ svn export <path/to/svn> .
- $ hg addremove
- $ hg ci -m "import upstream"
- $ hg tag UPSTREAM_webkitkde_0.0.<date>svn<rev>
+ $ debian/hgpkg import <path/to/svn> <version>
+     (<path/to/svn> is the svn working dir; <version> is the upstream version
+      string.  The import will switch to the upstream branch, import, and
+      switch back, and leave the uncommitted merge on the default branch.)
+   -> now examine the merge, correct packaging issues, edit debian/changelog if
+      necessary.
+ $ hg ci -m "new package version"
+ $ debian/hgpkg buildfull
+   -> if the package is good:
+ $ debian/hgpkg markdeb
 
- $ cd ../webkitkde
- $ hg pull
- $ hg merge upstream
-
-(arguably a mercurial bug: you'll get a merge conflict in .hgtags)
+(arguably a mercurial bug: you'll get a merge conflict in .hgtags during
+upstream import which you'll have to correct manually.)
 

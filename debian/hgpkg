@@ -1,0 +1,182 @@
+#! /bin/bash
+#
+# ©2009 Adrian von Bidder
+#
+# Manage Debian packages stored in Mercurial repositories.
+# hgpkg version 1.0
+# (script included here since it's not packaged [yet], maintained by avb in
+# a separate repository.  Licensing: same as webkitkde's packaging.)
+#
+
+set -e
+#set -x
+
+###
+# general helpers
+
+function onlinehelp() {
+    echo "Commands:
+    import <path> <version>:    import new upstream source
+    buildfull:                  build the orig.tar.bz2 and the Debian package
+    build:                      build the Debian package
+    markdeb:                    tag a version (after upload)"
+}
+
+# get package name from Debian changelog and
+# check that 'hg st' generates no output
+function preparedir() {
+    lines=`hg st | wc -l`
+    if [ "$lines" != "0" ]; then
+        echo "Error: Mercurial repository is not clean."
+        exit 1
+    fi
+
+    branch=`hg branch`
+    if [ "$branch" == "upstream" ]; then
+        echo "Warning: called in upstream branch, switching to default."
+        hg update -r default >> "$LOG"
+        branch=`hg branch`
+    fi
+    if [ "$branch" != "default" ]; then
+        echo "Error: must be called in default branch of repository."
+        exit 1
+    fi
+
+    # need to be in root dir:
+    root=`hg root`
+    cd "$root"
+
+    PKGNAME=`dpkg-parsechangelog 2>> "$LOG" | grep ^Source: | cut -f  2 -d \ `
+    if [ -z "$PKGNAME" ]; then
+        echo "Error: can't find package name."
+        exit 1
+    fi
+}
+
+###
+# subcommands
+
+# import new upstream version from subversion
+# TODO support other vcs and support tar
+function cmd_import() {
+    srcpath="$1"
+    srcver="$2"
+
+    # check: is source a svn dir?
+    if [ ! -d "$srcpath/.svn" ]; then
+        echo "Error: No subversion repository at '$srcpath'."
+        exit 1
+    fi
+
+    # switch to upstream branch
+    hg update -r upstream >> "$LOG"
+    br=`hg branch`
+    if [ "$br" != "upstream" ]; then
+        echo "Unexpected: I'm not in the upstream branch after update!"
+        exit 1
+    fi
+
+    # check: do we already know about this version?
+    tag="UPSTREAM_${PKGNAME}_$srcver"
+    if hg tags | grep -q "$tag"; then
+        echo "Error: Version already imported: tag '$tag' already exists."
+        hg update -r default >> "$LOG"
+        rm "$LOG" # since this is just a user error...
+        exit 1
+    fi
+
+    # ok, now let's be brave:
+    rm -rf ./*
+
+    # import (--force is needed because .hg dir is still in current dir.)
+    svn export --force "$srcpath" . >> "$LOG"
+
+    lines=`hg st | wc -l`
+    if [ "$lines" == "0" ]; then
+        echo "Error: no changes imported."
+        hg update -r default >> "$LOG"
+        rm "$LOG" # since this is just a user error...
+        exit 1
+    fi
+
+    # and commit
+    hg addremove
+    hg ci -m "hgpkg import: $PKGNAME $srcver"
+    hg tag "$tag"
+
+    # start merge into default branch:
+    hg update -r default >> "$LOG"
+    # TODO: find a way to auto-fix the expected merge conflict in .hgtags
+    hg merge upstream || \
+        echo "Warning: merge failed."
+    dch -D UNRELEASED -v "$srcver-1" "New upstream version."
+    # TODO dch fails if version is older than last version.
+    #   Proper fix would be to check this right at the start of import...
+    #   Leaving this right now since dch fails loudly and the error message
+    #   seems clear enough.
+    echo "Success: default (Debian) branch left with ucommitted merge."
+}
+
+# build orig tar and build package
+function cmd_buildfull() {
+    # TODO use latest UPSTREAM tag instead? Or at least learn sed properly
+    #   and get rid of the separate grep.
+    upstream=`dpkg-parsechangelog \
+        | grep ^Version: | sed -e's/^Version: \(.*\)-.*/\1/'`
+
+    # use hg archive to build tar
+    archive="../${PKGNAME}_$upstream.orig.tar.gz"
+    rm -f "$archive"
+    hg update -r upstream >> "$LOG"
+    hg archive -t tgz -X .hgtags -p "$PKGNAME-$upstream" "$archive"
+
+    # run debuild
+    hg update -r default >> "$LOG"
+    cmd_build
+}
+
+# just build the Debian package, assume the orig exists and is up to date.
+function cmd_build() {
+    # we're in tip of "default" branch in a clean repository, and mercurial is
+    # in debuild's default ignore patterns
+    set +e
+    debuild -i -I
+}
+
+function cmd_markdeb() {
+    version=`dpkg-parsechangelog \
+        | grep ^Version: | sed -e's/^Version: \(.*\)/\1/'`
+    hg tag "DEBIAN_${PKGNAME}_$version"
+}
+
+###
+# main
+
+function main() {
+    cmd="$1"
+    shift || true
+    if [ "$cmd" == "import" -a -n "$1" -a -n "$2" ]; then
+        runcmd="cmd_import"
+    elif [ "$cmd" == "buildfull" ]; then
+        runcmd="cmd_buildfull"
+    elif [ "$cmd" == "build" ]; then
+        runcmd="cmd_build"
+    elif [ "$cmd" == "markdeb" ]; then
+        runcmd="cmd_markdeb"
+    else
+        onlinehelp
+        exit
+    fi
+
+    # for now: save output of certain commands
+    LOG=`mktemp`
+
+    preparedir
+
+    $runcmd "$@"
+
+    # on success:
+    rm "$LOG"
+}
+
+main "$@"
