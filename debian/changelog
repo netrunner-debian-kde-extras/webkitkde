@@ -1,3 +1,10 @@
+webkitkde (0.4svn1064400-1) unstable; urgency=low
+
+  * New upstream version.
+    - fix display of the error page.
+
+ -- Adrian von Bidder <cmot@debian.org>  Mon, 21 Dec 2009 11:32:00 +0100
+
 webkitkde (0.4svn1064329-1) unstable; urgency=low
 
   * New upstream snapshot
