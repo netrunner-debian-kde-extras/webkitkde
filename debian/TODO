@@ -1,5 +1,4 @@
 File by file:
-copyright:
- * write in the new official syntax
- * verify list of upstream authors
-
+control:
+ * after squeeze release: remove conflicts/replaces on old package names (that
+   were never in testing.)
