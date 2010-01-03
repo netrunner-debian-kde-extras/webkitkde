@@ -17,9 +17,11 @@ add_definitions(${QT_DEFINITIONS} ${KDE4_DEFINITIONS})
 
 add_subdirectory(cmake)
 add_subdirectory(includes)
+add_subdirectory(icons)
 
 set(kwebkit_LIB_SRCS
     kwebkitpart.cpp
+    kwebkitpart_p.cpp
     kwebkitpart_ext.cpp
     webview.cpp
     webpage.cpp
