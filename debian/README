@@ -1,0 +1,9 @@
+Make khml the global default
+----------------------------
+
+By default, KHTML is preferred over the WebKit KPart.
+
+This can be changed in the file type dialog ('keditfiletype text/html' command,
+but you'll probably want to set it for a number of MIME Types), or you can set
+it globally by editing /usr/share/kde4/services/kwebkitpart.desktop and setting
+InitialPreference to a value bigger than 10 (default is 9, khtml is 10.)
