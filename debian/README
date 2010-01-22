@@ -1,9 +1,11 @@
-Make khml the global default
-----------------------------
+WebKit KPart is now the default
+-------------------------------
 
-By default, KHTML is preferred over the WebKit KPart.
+By default, if installed, the KDE WebKit KPart will take precedence over the
+khtml part. (This is a Debian specific change.)
 
 This can be changed in the file type dialog ('keditfiletype text/html' command,
-but you'll probably want to set it for a number of MIME Types), or you can set
-it globally by editing /usr/share/kde4/services/kwebkitpart.desktop and setting
-InitialPreference to a value bigger than 10 (default is 9, khtml is 10.)
+but you'll probably want to set it for a number of other MIME Types as well),
+or you can set it globally by editing the file kwebkitpart.desktop in
+/usr/share/kde4/services/ and setting InitialPreference back to its default
+value 9.  khtml has InitialPreference setting of 10.
