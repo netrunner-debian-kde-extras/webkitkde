@@ -2,8 +2,10 @@ webkitkde (0.9svn1068256-2) unstable; urgency=low
 
   * kwebkitpart.desktop: change priority to 11, so kpart-webkit (when
     installed) takes precedence over khtml.
+  * Drop pkg-kde-tools build dep (implicit through kdelibs5-dev)
+  * add ${misc:Depends} to make lintian happy.
 
- -- Adrian von Bidder <cmot@debian.org>  Fri, 22 Jan 2010 09:47:32 +0100
+ -- Adrian von Bidder <cmot@debian.org>  Fri, 22 Jan 2010 10:00:48 +0100
 
 webkitkde (0.9svn1068256-1) unstable; urgency=low
 
