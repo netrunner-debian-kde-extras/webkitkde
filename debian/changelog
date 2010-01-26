@@ -1,3 +1,9 @@
+webkitkde (0.9svn1079797-1) UNRELEASED; urgency=low
+
+  * New upstream version.
+
+ -- Adrian von Bidder <cmot@debian.org>  Tue, 26 Jan 2010 21:05:38 +0100
+
 webkitkde (0.9svn1068256-2) unstable; urgency=low
 
   * kwebkitpart.desktop: change priority to 11, so kpart-webkit (when

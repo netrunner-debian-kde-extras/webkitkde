@@ -9,7 +9,6 @@ include_directories(${KDE4_INCLUDES} ${CMAKE_CURRENT_SOURCE_DIR}/kdewebkit)
 add_definitions(${QT_DEFINITIONS} ${KDE4_DEFINITIONS})
 
 add_subdirectory(includes)
-add_subdirectory(cmake)
 
 set(kdewebkit_LIB_SRCS
     kwebpage.cpp
@@ -25,22 +24,15 @@ qt4_add_resources(kdewebkit_RC_SRCS
 )
 
 kde4_add_library(kdewebkit SHARED ${kdewebkit_LIB_SRCS} ${kdewebkit_RC_SRCS})
-
-target_link_libraries(kdewebkit
-    ${KDE4_KPARTS_LIBS}
-    ${QT_QTWEBKIT_LIBRARY}
-    ${QT_QTUITOOLS_LIBRARY}
-    ${QT_QTXML_LIBRARY}
-)
-
+target_link_libraries(kdewebkit ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY} ${QT_QTUITOOLS_LIBRARY} ${QT_QTXML_LIBRARY})
 set_target_properties(kdewebkit PROPERTIES VERSION 1.0.0 SOVERSION 1) # for the moment keep something low...
 
 install(TARGETS kdewebkit ${INSTALL_TARGETS_DEFAULT_ARGS})
 
 install(FILES
-    kdewebkit_export.h
-    kwebpluginfactory.h
-    kwebpage.h
-    kwebview.h
-    DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
+        kdewebkit_export.h
+        kwebpluginfactory.h
+        kwebpage.h
+        kwebview.h
+        DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
 
