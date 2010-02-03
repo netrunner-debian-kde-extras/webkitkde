@@ -61,6 +61,14 @@ function cmd_import() {
     srcpath="$1"
     srcver="$2"
 
+    # need to convert srcpath to an absolute path
+    if [ ! -d "$srcpath" ]; then
+        echo "Errror: $srcpath doesn't exist."
+        rm -rf "$WORKDIR"
+        exit 1
+    fi
+    srcpath=`cd "$srcpath"; pwd`
+
     # check: is source a svn dir?
     if [ -d "$srcpath/.svn" ]; then
         svn="yes"
