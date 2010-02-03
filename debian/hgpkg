@@ -3,9 +3,9 @@
 # ©2009 Adrian von Bidder
 #
 # Manage Debian packages stored in Mercurial repositories.
-# hgpkg version 1.0
+# hgpkg version 1.1
 # (script included here since it's not packaged [yet], maintained by avb in
-# a separate repository.  Licensing: same as webkitkde's packaging.)
+# a separate repository.  Licensing: same as zeromq's packaging.)
 #
 
 set -e
@@ -63,9 +63,8 @@ function cmd_import() {
     srcver="$2"
 
     # check: is source a svn dir?
-    if [ ! -d "$srcpath/.svn" ]; then
-        echo "Error: No subversion repository at '$srcpath'."
-        exit 1
+    if [ -d "$srcpath/.svn" ]; then
+        svn="yes"
     fi
 
     # switch to upstream branch
@@ -89,7 +88,11 @@ function cmd_import() {
     rm -rf ./*
 
     # import (--force is needed because .hg dir is still in current dir.)
-    svn export --force "$srcpath" . >> "$LOG"
+    if [ "$svn" == "yes" ]; then
+        svn export --force "$srcpath" . >> "$LOG"
+    else
+        cp -r "$srcpath"/* .
+    fi
 
     lines=`hg st | wc -l`
     if [ "$lines" == "0" ]; then
