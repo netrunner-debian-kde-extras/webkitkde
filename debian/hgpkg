@@ -3,13 +3,13 @@
 # ©2009 Adrian von Bidder
 #
 # Manage Debian packages stored in Mercurial repositories.
-# hgpkg version 1.1
+# hgpkg version 1.2beta
 # (script included here since it's not packaged [yet], maintained by avb in
 # a separate repository.  Licensing: same as zeromq's packaging.)
 #
 
 set -e
-#set -x
+set -x
 
 ###
 # general helpers
@@ -57,7 +57,6 @@ function preparedir() {
 # subcommands
 
 # import new upstream version from subversion
-# TODO support other vcs and support tar
 function cmd_import() {
     srcpath="$1"
     srcver="$2"
@@ -66,6 +65,12 @@ function cmd_import() {
     if [ -d "$srcpath/.svn" ]; then
         svn="yes"
     fi
+
+    # switching to upstream may leave .hgignore'd files around that will then
+    # be included.  Work on a cloned repo instead:
+    hg clone . "$WORKDIR"/"$PKGNAME" >> "$LOG"
+    pushd . >/dev/null
+    cd "$WORKDIR"/"$PKGNAME"
 
     # switch to upstream branch
     hg update -r upstream >> "$LOG"
@@ -79,12 +84,14 @@ function cmd_import() {
     tag="UPSTREAM_${PKGNAME}_$srcver"
     if hg tags | grep -q "$tag"; then
         echo "Error: Version already imported: tag '$tag' already exists."
-        hg update -r default >> "$LOG"
-        rm "$LOG" # since this is just a user error...
+        popd >/dev/null
+        rm -rf "$WORKDIR" # since this is just a user error...
         exit 1
     fi
 
     # ok, now let's be brave:
+    # if we did right, we're at the root of the cloned repo
+    # at the tip of the upstream branch.
     rm -rf ./*
 
     # import (--force is needed because .hg dir is still in current dir.)
@@ -97,8 +104,8 @@ function cmd_import() {
     lines=`hg st | wc -l`
     if [ "$lines" == "0" ]; then
         echo "Error: no changes imported."
-        hg update -r default >> "$LOG"
-        rm "$LOG" # since this is just a user error...
+        popd >/dev/null
+        rm -rf "$WORKDIR" # since this is just a user error...
         exit 1
     fi
 
@@ -107,8 +114,10 @@ function cmd_import() {
     hg ci -m "hgpkg import: $PKGNAME $srcver"
     hg tag "$tag"
 
-    # start merge into default branch:
-    hg update -r default >> "$LOG"
+    # push upstream changes back into the working repo and merge
+    # usually creates a new head, so --force.
+    hg push -f >> "$LOG"
+    popd > /dev/null
     # TODO: find a way to auto-fix the expected merge conflict in .hgtags
     hg merge upstream || \
         echo "Warning: merge failed."
@@ -172,14 +181,15 @@ function main() {
     fi
 
     # for now: save output of certain commands
-    LOG=`mktemp`
+    WORKDIR=`mktemp -t -d hgpkg.XXXX`
+    LOG="$WORKDIR/log"
 
     preparedir
 
     $runcmd "$@"
 
     # on success:
-    rm "$LOG"
+    rm -rf "$WORKDIR"
 }
 
 main "$@"
