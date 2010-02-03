@@ -12,7 +12,8 @@ Description: the repository contains an "upstream" and a "default" branch;
 "upstream" is directly imported from upstream's svn, and the default branch
 contains the directory as it is to be packed by dpkg-source.
 
-So far, the upstream source is unpatched.
+Difference to upstream:
+  * preference to the webkit part (11 instead of 9) in kwebkitpart.desktop.
 
 Upstream is at:
     svn://anonsvn.kde.org/home/kde/trunk/playground/libs/webkitkde
