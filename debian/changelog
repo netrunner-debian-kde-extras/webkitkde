@@ -1,10 +1,10 @@
-webkitkde (0.9svn1080813-2) unstable; urgency=low
+webkitkde (0.9svn1084767-1) unstable; urgency=low
 
   * New upstream version.
   * Add libwebkit-dev build dependency
   * prefer webkit kpart over khtml by default.
 
- -- Adrian von Bidder <cmot@debian.org>  Wed, 03 Feb 2010 18:21:34 +0100
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 03 Feb 2010 20:02:01 +0100
 
 webkitkde (0.9svn1068256-2) unstable; urgency=low
 

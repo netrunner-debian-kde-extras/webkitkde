@@ -3,13 +3,13 @@
 # ©2009 Adrian von Bidder
 #
 # Manage Debian packages stored in Mercurial repositories.
-# hgpkg version 1.2beta
+# hgpkg version 1.2
 # (script included here since it's not packaged [yet], maintained by avb in
 # a separate repository.  Licensing: same as zeromq's packaging.)
 #
 
 set -e
-set -x
+#set -x
 
 ###
 # general helpers
