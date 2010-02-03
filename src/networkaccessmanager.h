@@ -28,7 +28,7 @@
 #include <kio/accessmanager.h>
 typedef KIO::AccessManager AccessManagerBase;
 #else
-#include "kdewebkit/networkaccessmanager_p.h"
+#include "networkaccessmanager_p.h"
 typedef KDEPrivate::NetworkAccessManager AccessManagerBase;
 #endif
 
