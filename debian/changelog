@@ -1,3 +1,9 @@
+webkitkde (0.9svn1084767-2) unstable; urgency=low
+
+  * libkwebkit-dbg now depends on libqt4-webkit-dbg
+
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 10 Feb 2010 09:29:01 +0100
+
 webkitkde (0.9svn1084767-1) unstable; urgency=low
 
   * New upstream version.
