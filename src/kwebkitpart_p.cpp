@@ -39,9 +39,11 @@
 #include <KDE/KStringHandler>
 #include <KDE/KMessageBox>
 #include <KDE/KDebug>
+#include <KDE/KFileItem>
 
 #include <QtGui/QVBoxLayout>
 #include <QtWebKit/QWebFrame>
+#include <QtWebKit/QWebElement>
 
 #define QL1S(x) QLatin1String(x)
 #define QL1C(x) QLatin1Char(x)
@@ -136,6 +138,32 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
     updateHistory = true;
 
     if (ok) {
+        if (WebKitSettings::self()->isFormCompletionEnabled() && webPage->wallet()) {
+            webPage->wallet()->fillFormData(webPage->mainFrame());
+        }
+
+        QString linkStyle;
+
+        QColor linkColor = WebKitSettings::self()->vLinkColor();
+        if (linkColor.isValid())
+            linkStyle += QString::fromLatin1("a:visited {color: rgb(%1,%2,%3);}\n")
+                         .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
+
+        linkColor = WebKitSettings::self()->linkColor();
+        if (linkColor.isValid())
+            linkStyle += QString::fromLatin1("a:active {color: rgb(%1,%2,%3);}\n")
+                         .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
+
+        if (WebKitSettings::self()->underlineLink()) {
+            linkStyle += QL1S("a:link {text-decoration:underline;}\n");
+        } else if (WebKitSettings::self()->hoverLink()) {
+            linkStyle += QL1S("a:hover {text-decoration:underline;}\n");
+        }
+
+        if (!linkStyle.isEmpty()) {
+            webPage->mainFrame()->documentElement().setAttribute(QL1S("style"), linkStyle);
+        }
+
         // Restore page state as necessary...
         webPage->restoreAllFrameState();
 
@@ -149,10 +177,6 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
             // a work around here for pages that do not contain it, such as
             // text documents...
             slotUrlChanged(webView->url());
-        }
-
-        if (WebKitSettings::self()->isFormCompletionEnabled() && webPage->wallet()) {
-            webPage->wallet()->fillFormData(webPage->mainFrame());
         }
     }
 
@@ -180,7 +204,7 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
         break;
       }
     }
-    emit completed(refresh);
+    emit q->completed(refresh);
 #else
     emit q->completed();
 #endif
@@ -237,7 +261,7 @@ void KWebKitPartPrivate::slotShowSecurity()
         dlg->exec();
     } else {
         KMessageBox::information(0, i18n("The SSL information for this site "
-                                         "appears to be corrupt."), i18n("SSL"));
+                                         "appears to be corrupt."), i18nc("Secure Sockets Layer", "SSL"));
     }
 }
 
@@ -255,43 +279,72 @@ void KWebKitPartPrivate::slotLinkHovered(const QString &link, const QString &tit
     Q_UNUSED(content);
 
     QString message;
-    QUrl linkUrl (link);
-    const QString scheme = linkUrl.scheme();
 
-    if (QString::compare(scheme, QL1S("mailto"), Qt::CaseInsensitive) == 0) {
-        message += i18n("Email: ");
-
-        // Workaround: for QUrl's parsing deficiencies of "mailto:foo@bar.com".
-        if (!linkUrl.hasQuery())
-          linkUrl = QUrl(scheme + '?' + linkUrl.path());
-
-        QMap<QString, QStringList> fields;
-        QPair<QString, QString> queryItem;
-
-        Q_FOREACH (queryItem, linkUrl.queryItems()) {
-            //kDebug() << "query: " << queryItem.first << queryItem.second;
-            if (queryItem.first.contains(QL1C('@')) && queryItem.second.isEmpty())
-                fields["to"] << queryItem.first;
-            if (QString::compare(queryItem.first, QL1S("to"), Qt::CaseInsensitive) == 0)
-                fields["to"] << queryItem.second;
-            if (QString::compare(queryItem.first, QL1S("cc"), Qt::CaseInsensitive) == 0)
-                fields["cc"] << queryItem.second;
-            if (QString::compare(queryItem.first, QL1S("bcc"), Qt::CaseInsensitive) == 0)
-                fields["bcc"] << queryItem.second;
-            if (QString::compare(queryItem.first, QL1S("subject"), Qt::CaseInsensitive) == 0)
-                fields["subject"] << queryItem.second;
-        }
-
-        if (fields.contains(QL1S("to")))
-            message += fields.value(QL1S("to")).join(QL1S(", "));
-        if (fields.contains(QL1S("cc")))
-            message += QL1S(" - CC: ") + fields.value(QL1S("cc")).join(QL1S(", "));
-        if (fields.contains(QL1S("bcc")))
-            message += QL1S(" - BCC: ") + fields.value(QL1S("bcc")).join(QL1S(", "));
-        if (fields.contains(QL1S("subject")))
-            message += QL1S(" - Subject: ") + fields.value(QL1S("subject")).join(QL1S(" "));
+    if (link.isEmpty()) {
+        message = QL1S("");
+        emit browserExtension->mouseOverInfo(KFileItem());
     } else {
-        message = link;
+        QUrl linkUrl (link);
+        const QString scheme = linkUrl.scheme();
+
+        if (QString::compare(scheme, QL1S("mailto"), Qt::CaseInsensitive) == 0) {
+            message += i18nc("status bar text when hovering email links; looks like \"Email: xy@kde.org - CC: z@kde.org -BCC: x@kde.org - Subject: Hi translator\"", "Email: ");
+
+            // Workaround: for QUrl's parsing deficiencies of "mailto:foo@bar.com".
+            if (!linkUrl.hasQuery())
+              linkUrl = QUrl(scheme + '?' + linkUrl.path());
+
+            QMap<QString, QStringList> fields;
+            QPair<QString, QString> queryItem;
+
+            Q_FOREACH (queryItem, linkUrl.queryItems()) {
+                //kDebug() << "query: " << queryItem.first << queryItem.second;
+                if (queryItem.first.contains(QL1C('@')) && queryItem.second.isEmpty())
+                    fields["to"] << queryItem.first;
+                if (QString::compare(queryItem.first, QL1S("to"), Qt::CaseInsensitive) == 0)
+                    fields["to"] << queryItem.second;
+                if (QString::compare(queryItem.first, QL1S("cc"), Qt::CaseInsensitive) == 0)
+                    fields["cc"] << queryItem.second;
+                if (QString::compare(queryItem.first, QL1S("bcc"), Qt::CaseInsensitive) == 0)
+                    fields["bcc"] << queryItem.second;
+                if (QString::compare(queryItem.first, QL1S("subject"), Qt::CaseInsensitive) == 0)
+                    fields["subject"] << queryItem.second;
+            }
+
+            if (fields.contains(QL1S("to")))
+                message += fields.value(QL1S("to")).join(QL1S(", "));
+            if (fields.contains(QL1S("cc")))
+                message += i18nc("status bar text when hovering email links; looks like \"Email: xy@kde.org - CC: z@kde.org -BCC: x@kde.org - Subject: Hi translator\"", " - CC: ") + fields.value(QL1S("cc")).join(QL1S(", "));
+            if (fields.contains(QL1S("bcc")))
+                message += i18nc("status bar text when hovering email links; looks like \"Email: xy@kde.org - CC: z@kde.org -BCC: x@kde.org - Subject: Hi translator\"", " - BCC: ") + fields.value(QL1S("bcc")).join(QL1S(", "));
+            if (fields.contains(QL1S("subject")))
+                message += i18nc("status bar text when hovering email links; looks like \"Email: xy@kde.org - CC: z@kde.org -BCC: x@kde.org - Subject: Hi translator\"", " - Subject: ") + fields.value(QL1S("subject")).join(QL1S(" "));
+        } else if (linkUrl.scheme() == QL1S("javascript") &&
+                   link.startsWith("javascript:window.open")) {
+            message = KStringHandler::rsqueeze(link, 80);
+            message += i18n(" (In new window)");
+        } else {
+            message = link;
+            QWebElementCollection collection = webPage->mainFrame()->documentElement().findAll(QL1S("a[href]"));
+            Q_FOREACH(const QWebElement &element, collection) {
+                //kDebug() << "link:" << link << "href" << element.attribute(QL1S("href"));
+                if (element.hasAttribute(QL1S("target")) &&
+                    link.contains(element.attribute(QL1S("href")), Qt::CaseInsensitive)) {
+                    const QString target = element.attribute(QL1S("target")).toLower().simplified();
+                    if (target == QL1S("top") || target == QL1S("_blank")) {
+                        message += i18n(" (In new window)");
+                        break;
+                    }
+                    else if (target == QL1S("_parent")) {
+                        message += i18n(" (In parent frame)");
+                        break;
+                    }
+                }
+            }
+
+            KFileItem item (linkUrl, QString(), KFileItem::Unknown);
+            emit browserExtension->mouseOverInfo(item);
+        }
     }
 
     emit q->setStatusBarText(message);

@@ -2,7 +2,7 @@
  * This file is part of the KDE project.
  *
  * Copyright (C) 2008 Dirk Mueller <mueller@kde.org>
- * Copyright (C) 2008 Urs Wolfer <uwolfer @ kde.org>
+ * Copyright (C) 2008 - 2010 Urs Wolfer <uwolfer @ kde.org>
  * Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
  *
  * This library is free software; you can redistribute it and/or
@@ -54,6 +54,7 @@
 #include <QtNetwork/QNetworkReply>
 #include <QtUiTools/QUiLoader>
 #include <QtWebKit/QWebFrame>
+#include <QtWebKit/QWebSecurityOrigin>
 
 #define QL1S(x)  QLatin1String(x)
 #define QL1C(x)  QLatin1Char(x)
@@ -63,7 +64,7 @@ typedef QPair<QString, QString> StringPair;
 // Sanitizes the "mailto:" url, e.g. strips out any "attach" parameters.
 static QUrl sanitizeMailToUrl(const QUrl &url, QStringList& files) {
     QUrl sanitizedUrl;    
-    
+
     // NOTE: This is necessary to ensure we can properly use QUrl's query
     // related APIs to process 'mailto:' urls of form 'mailto:foo@bar.com'.
     if (url.hasQuery())
@@ -82,7 +83,7 @@ static QUrl sanitizeMailToUrl(const QUrl &url, QStringList& files) {
         } else if (QString::compare(queryItem.first, QL1S("attach"), Qt::CaseInsensitive) == 0) {
             files << queryItem.second;
             continue;
-        }        
+        }
         sanitizedUrl.addQueryItem(queryItem.first, queryItem.second);
     }
 
@@ -150,25 +151,6 @@ static bool domainSchemeMatch(const QUrl& u1, const QUrl& u2)
     return (u1List == u2List);
 }
 
-#if 0
-static QString getFileNameForDownload(const QNetworkRequest &request, QNetworkReply *reply)
-{
-    QString fileName = KUrl(request.url()).fileName();    
-
-    if (reply && reply->hasRawHeader("Content-Disposition")) { // based on code from arora, downloadmanger.cpp
-        const QString value = QL1S(reply->rawHeader("Content-Disposition"));
-        const int pos = value.indexOf(QL1S("filename="));
-        if (pos != -1) {
-            QString name = value.mid(pos + 9);
-            if (name.startsWith(QL1C('"')) && name.endsWith(QL1C('"')))
-                name = name.mid(1, name.size() - 2);
-            fileName = name;
-        }
-    }
-
-    return fileName;
-}
-#endif
 
 class WebPage::WebPagePrivate
 {
@@ -178,7 +160,7 @@ public:
     WebSslInfo sslInfo;
     QHash<QString, WebFrameState> frameStateContainer;
     // Holds list of requests including those from children frames
-    QMultiHash<QUrl, QWebFrame*> requestQueue;
+    QList<QUrl> requestQueue;
     QPointer<KWebKitPart> part;
 };
 
@@ -202,6 +184,14 @@ WebPage::WebPage(KWebKitPart *part, QWidget *parent)
         WebKitSettings::self()->computeFontSizes(view()->logicalDpiY());
 
     setForwardUnsupportedContent(true);
+
+    // Tell QtWebKit to treat man:/ protocol as a local resource...
+    QWebSecurityOrigin::addLocalScheme(QL1S("man"));
+
+    // Override the 'Accept' header sent by QtWebKit which favors XML over HTML!
+    // Setting the accept meta-data to null will force kio_http to use its own
+    // default settings for this header.
+    setSessionMetaData(QL1S("accept"), QString());
 
     connect(this, SIGNAL(geometryChangeRequested(const QRect &)),
             this, SLOT(slotGeometryChangeRequested(const QRect &)));
@@ -279,7 +269,7 @@ void WebPage::restoreAllFrameState()
 
 bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &request, NavigationType type)
 {
-    const QUrl reqUrl (request.url());
+    QUrl reqUrl (request.url());
 
     // Handle "mailto:" url here...
     if (handleMailToUrl(reqUrl, type))
@@ -378,7 +368,8 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
         }
 
         // Insert the request into the queue...
-        d->requestQueue.insert (request.url(), frame);
+        reqUrl.setUserInfo(QString());
+        d->requestQueue << reqUrl;
     }
 
     return KWebPage::acceptNavigationRequest(frame, request, type);
@@ -389,28 +380,26 @@ QWebPage *WebPage::createWindow(WebWindowType type)
     kDebug() << type;
     KParts::ReadOnlyPart *part = 0;
     KParts::OpenUrlArguments args;
-    args.metaData()["referrer"] = mainFrame()->url().toString();
+    //args.metaData()["referrer"] = mainFrame()->url().toString();
 
     KParts::BrowserArguments bargs;
     bargs.setLockHistory(true);
-    //if (type == WebModalDialog)
+    if (type == WebModalDialog)
         bargs.setForcesNewWindow(true);
 
     d->part->browserExtension()->createNewWindow(KUrl("about:blank"), args, bargs,
                                                  KParts::WindowArgs(), &part);
 
     KWebKitPart *webKitPart = qobject_cast<KWebKitPart*>(part);
+    if (webKitPart)
+        return webKitPart->view()->page();
 
-    if (!webKitPart) {
-        if (part)
-            kDebug() << "Got a non KWebKitPart" << part->metaObject()->className();
-        else
-            kDebug() << "part is null";
+    if (part)
+        kDebug() << "Got a non KWebKitPart" << part->metaObject()->className();
+    else
+        kDebug() << "part is NULL";
 
-        return 0;
-    }
-
-    return webKitPart->view()->page();
+    return 0;
 }
 
 void WebPage::slotUnsupportedContent(QNetworkReply *reply)
@@ -418,6 +407,11 @@ void WebPage::slotUnsupportedContent(QNetworkReply *reply)
     KParts::OpenUrlArguments args;
     const KUrl url(reply->url());
     kDebug() << url;
+
+    // FIXME: Until we implement a way to resume/continue a network
+    // request. We must abort the reply to prevent a zombie process
+    // from continuing to download the unsupported content!
+    reply->abort();
 
     Q_FOREACH (const QByteArray &headerName, reply->rawHeaderList()) {
         args.metaData().insert(QString(headerName), QString(reply->rawHeader(headerName)));
@@ -441,8 +435,8 @@ void WebPage::downloadRequest(const QNetworkRequest &request)
             kDebug() << "Using: " << downloadManger << " as Download Manager";
             QString cmd = KStandardDirs::findExe(downloadManger);
             if (cmd.isEmpty()) {
-                QString errMsg = i18n("The Download Manager (%1) could not be found in your $PATH.", downloadManger);
-                QString errMsgEx = i18n("Try to reinstall it. \n\nThe integration with Konqueror will be disabled.");
+                QString errMsg = i18n("The download manager (%1) could not be found in your installation.", downloadManger);
+                QString errMsgEx = i18n("Try to reinstall it and make sure that it is available in $PATH. \n\nThe integration will be disabled.");
                 KMessageBox::detailedSorry(view(), errMsg, errMsgEx);
                 cfg.writePathEntry("DownloadManager", QString());
                 cfg.sync();
@@ -528,11 +522,10 @@ void WebPage::slotRequestFinished(QNetworkReply *reply)
 {
     Q_ASSERT(reply);
     QUrl url (reply->request().url());
+    QWebFrame* frame = qobject_cast<QWebFrame *>(reply->request().originatingObject());
 
-    if (d->requestQueue.contains(url)) {
-
+    if (frame && d->requestQueue.removeOne(url)) {
         kDebug() << url;
-        QWebFrame* frame = d->requestQueue.take(url);
         const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
         if (statusCode > 300 && statusCode < 304) {
@@ -604,7 +597,7 @@ bool WebPage::checkLinkSecurity(const QNetworkRequest &req, NavigationType type)
             message = i18n("<qt>This untrusted page links to<br/><b>%1</b>."
                            "<br/>Do you want to follow the link?</qt>", linkUrl.url());
             title = i18n("Security Warning");
-            buttonText = i18n("Follow");
+            buttonText = i18nc("follow link despite of security warning", "Follow");
         } else {
             title = i18n("Security Alert");
             message = i18n("<qt>Access by untrusted page to<br/><b>%1</b><br/> denied.</qt>",
@@ -691,7 +684,7 @@ bool WebPage::handleMailToUrl (const QUrl& url, NavigationType type) const
                     KMessageBox::information(0, i18n("This site attempted to attach a file from your "
                                                      "computer in the form submission. The attachment "
                                                      "was removed for your protection."),
-                                             i18n("KDE"), "InfoTriedAttach");
+                                             i18n("Attachment Removed"), "InfoTriedAttach");
                 }
                 break;
             default:

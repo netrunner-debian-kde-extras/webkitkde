@@ -1,6 +1,7 @@
 /*  This file is part of the KDE project
-    Copyright (C) 2007 David Faure <faure@kde.org>
 
+    Copyright (C) 2010 Dawit Alemayehu <adawit@kde.org>
+ 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Library General Public
     License as published by the Free Software Foundation; either
@@ -24,7 +25,7 @@
 #include <kdemacros.h>
 
 #ifndef KWEBKIT_EXPORT
-# if defined(MAKE_WEBKITKDE_LIB)
+# if defined(MAKE_KWEBKIT_LIB)
    /* We are building this library */ 
 #  define KWEBKIT_EXPORT KDE_EXPORT
 # else
