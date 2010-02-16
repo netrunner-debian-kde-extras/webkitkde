@@ -1,8 +1,12 @@
-webkitkde (0.9svn1084767-2) unstable; urgency=low
+webkitkde (0.9svn1090935-1) UNRELEASED; urgency=low
 
+  * New upstream version.
+    - upstream is now in extragear, not playground.
+    - source package includes only the kpart.  KDE webkit stuff
+      has moved to kdelibs.
   * libkwebkit-dbg now depends on libqt4-webkit-dbg
 
- -- Adrian von Bidder <cmot@debian.org>  Wed, 10 Feb 2010 09:29:01 +0100
+ -- Adrian von Bidder <cmot@debian.org>  Tue, 16 Feb 2010 13:25:42 +0100
 
 webkitkde (0.9svn1084767-1) unstable; urgency=low
 

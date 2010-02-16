@@ -25,15 +25,9 @@ kde4_add_ui_files(kwebkit_LIB_SRCS
 ########################### kwebkit #############################
 kde4_add_library(kwebkit SHARED ${kwebkit_LIB_SRCS})
 
-if(${KDE_VERSION} VERSION_LESS 4.3.80)
-    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../kdewebkit)
-    link_directories(${CMAKE_CURRENT_BINARY_DIR}/../kdewebkit)
-    target_link_libraries(kwebkit kdewebkit ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY} ${QT_QTUITOOLS_LIBRARY})
-else(${KDE_VERSION} VERSION_LESS 4.3.80)
-    target_link_libraries(kwebkit ${KDE4_KPARTS_LIBS} ${KDE4_KDEWEBKIT_LIBS} ${QT_QTWEBKIT_LIBRARY} ${QT_QTUITOOLS_LIBRARY})
-endif(${KDE_VERSION} VERSION_LESS 4.3.80)
+target_link_libraries(kwebkit ${KDE4_KPARTS_LIBS} ${KDE4_KDEWEBKIT_LIBS} ${QT_QTWEBKIT_LIBRARY} ${QT_QTUITOOLS_LIBRARY})
 
-set_target_properties(kwebkit PROPERTIES VERSION 1.0.0 SOVERSION 1)
+set_target_properties(kwebkit PROPERTIES VERSION 0.9.0 SOVERSION 1)
 ########################### kwebkit #############################
 
 ########################### kwebkitpart #############################
@@ -41,13 +35,10 @@ kde4_add_plugin(kwebkitpart kwebkitpartfactory.cpp)
 
 target_link_libraries(kwebkitpart ${KDE4_KPARTS_LIBS} ${QT_QTWEBKIT_LIBRARY} kwebkit)
 
-set_target_properties(kwebkitpart PROPERTIES VERSION 1.0.0 SOVERSION 1)
+set_target_properties(kwebkitpart PROPERTIES VERSION 0.9.0 SOVERSION 1)
 ########################### kwebkitpart #############################
 
-install(FILES
-        kwebkit_export.h
-        kwebkitpart.h
-        DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
+install(FILES kwebkitpart.h kwebkit_export.h DESTINATION ${INCLUDE_INSTALL_DIR} COMPONENT Devel)
 
 install(TARGETS kwebkit ${INSTALL_TARGETS_DEFAULT_ARGS})
 
@@ -55,6 +46,6 @@ install(TARGETS kwebkitpart DESTINATION ${PLUGIN_INSTALL_DIR})
 
 install(FILES kwebkitpart.desktop DESTINATION ${SERVICES_INSTALL_DIR})
 
-install(FILES kwebkitpart.rc DESTINATION  ${DATA_INSTALL_DIR}/kwebkitpart)
+install(FILES kwebkitpart.rc DESTINATION ${DATA_INSTALL_DIR}/kwebkitpart)
 
 install(FILES error.html DESTINATION ${DATA_INSTALL_DIR}/kwebkitpart)
