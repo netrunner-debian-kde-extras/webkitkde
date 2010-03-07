@@ -26,13 +26,14 @@
 #include "searchbar.h"
 #include "ui_searchbar.h"
 
-#include <QResizeEvent>
-#include <QShortcut>
-
 #include <KDE/KColorScheme>
 #include <KDE/KDebug>
 #include <KDE/KIcon>
 #include <KDE/KLocalizedString>
+
+#include <QtGui/QResizeEvent>
+#include <QtGui/QShortcut>
+
 
 namespace KDEPrivate {
 
@@ -45,6 +46,7 @@ public:
     {
         ui.setupUi(searchBar);
         ui.optionsButton->addAction(ui.actionMatchCase);
+        ui.optionsButton->addAction(ui.actionHighlightMatch);
         ui.optionsButton->addAction(ui.actionSearchAutomatically);
         ui.closeButton->setIcon(KIcon("dialog-close"));
         ui.previousButton->setIcon(KIcon("go-up-search"));
@@ -61,6 +63,8 @@ public:
                 searchBar, SLOT(findPrevious()));
         connect(ui.searchLineEdit, SIGNAL(returnPressed()),
                 searchBar, SLOT(findNext()));
+        connect(ui.searchLineEdit, SIGNAL(textChanged(const QString&)),
+                searchBar, SLOT(textChanged(const QString&)));
 
         // Update the state of the searchAsYouType option
         searchBar->searchAsYouTypeChanged (ui.actionSearchAutomatically->isChecked());
@@ -104,8 +108,9 @@ void SearchBar::show()
 
 void SearchBar::hide()
 {
-    if (isVisible()) {
+    if (isVisible()) {        
       d->ui.searchLineEdit->setStyleSheet(QString());
+      emit searchTextChanged(QString());
       QWidget::hide();
     }
 }
@@ -120,8 +125,14 @@ bool SearchBar::caseSensitive() const
     return d->ui.actionMatchCase->isChecked();
 }
 
+bool SearchBar::highlightMatches() const
+{
+    return d->ui.actionHighlightMatch->isChecked();
+}
+
 void SearchBar::setSearchText(const QString& text)
 {
+    show();
     d->ui.searchLineEdit->setText(text);
 }
 
@@ -171,6 +182,13 @@ void SearchBar::findPrevious()
         return;
 
     emit searchTextChanged(d->ui.searchLineEdit->text(), true);
+}
+
+void SearchBar::textChanged(const QString &text)
+{
+    if (text.isEmpty()) {
+        d->ui.searchLineEdit->setStyleSheet(QString());
+    }
 }
 
 }

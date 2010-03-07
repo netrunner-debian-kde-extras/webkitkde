@@ -40,18 +40,119 @@
 #include <KDE/KMessageBox>
 #include <KDE/KDebug>
 #include <KDE/KFileItem>
+#include <KDE/KStandardDirs>
+#include <KDE/KIconLoader>
+#include <KDE/KConfigGroup>
+#include <KDE/KAction>
+#include <KDE/KActionCollection>
+#include <KDE/KGlobal>
+#include <KDE/KLocale>
+#include <KDE/KUrlLabel>
+#include <KDE/KStatusBar>
+#include <KDE/KToolInvocation>
+#include <KDE/KMenu>
+#include <KDE/KAcceleratorManager>
+#include <KParts/StatusBarExtension>
 
+#include <QtCore/QFile>
+#include <QtGui/QApplication>
 #include <QtGui/QVBoxLayout>
+#include <QtDBus/QDBusInterface>
 #include <QtWebKit/QWebFrame>
 #include <QtWebKit/QWebElement>
 
 #define QL1S(x) QLatin1String(x)
 #define QL1C(x) QLatin1Char(x)
 
+
+static QString htmlError (int code, const QString& text, const KUrl& reqUrl)
+{
+  QString errorName, techName, description;
+  QStringList causes, solutions;
+
+  QByteArray raw = KIO::rawErrorDetail( code, text, &reqUrl );
+  QDataStream stream(raw);
+
+  stream >> errorName >> techName >> description >> causes >> solutions;
+
+  QString url, protocol, datetime;
+  url = reqUrl.url();
+  protocol = reqUrl.protocol();
+  datetime = KGlobal::locale()->formatDateTime( QDateTime::currentDateTime(),
+                                                KLocale::LongDate );
+
+  QString filename( KStandardDirs::locate( "data", "kwebkitpart/error.html" ) );
+  QFile file( filename );
+  bool isOpened = file.open( QIODevice::ReadOnly );
+  if ( !isOpened )
+    kWarning() << "Could not open error html template:" << filename;
+
+  QString html = QString( QL1S( file.readAll() ) );
+
+  html.replace( QL1S( "TITLE" ), i18n( "Error: %1", errorName ) );
+  html.replace( QL1S( "DIRECTION" ), QApplication::isRightToLeft() ? "rtl" : "ltr" );
+  html.replace( QL1S( "ICON_PATH" ), KUrl(KIconLoader::global()->iconPath("dialog-warning", -KIconLoader::SizeHuge)).url() );
+
+  QString doc = QL1S( "<h1>" );
+  doc += i18n( "The requested operation could not be completed" );
+  doc += QL1S( "</h1><h2>" );
+  doc += errorName;
+  doc += QL1S( "</h2>" );
+
+  if ( !techName.isNull() ) {
+    doc += QL1S( "<h2>" );
+    doc += i18n( "Technical Reason: %1", techName );
+    doc += QL1S( "</h2>" );
+  }
+
+  doc += QL1S( "<h3>" );
+  doc += i18n( "Details of the Request:" );
+  doc += QL1S( "</h3><ul><li>" );
+  doc += i18n( "URL: %1" ,  url );
+  doc += QL1S( "</li><li>" );
+
+  if ( !protocol.isNull() ) {
+    doc += i18n( "Protocol: %1", protocol );
+    doc += QL1S( "</li><li>" );
+  }
+
+  doc += i18n( "Date and Time: %1" ,  datetime );
+  doc += QL1S( "</li><li>" );
+  doc += i18n( "Additional Information: %1" ,  text );
+  doc += QL1S( "</li></ul><h3>" );
+  doc += i18n( "Description:" );
+  doc += QL1S( "</h3><p>" );
+  doc += description;
+  doc += QL1S( "</p>" );
+
+  if ( causes.count() ) {
+    doc += QL1S( "<h3>" );
+    doc += i18n( "Possible Causes:" );
+    doc += QL1S( "</h3><ul><li>" );
+    doc += causes.join( "</li><li>" );
+    doc += QL1S( "</li></ul>" );
+  }
+
+  if ( solutions.count() ) {
+    doc += QL1S( "<h3>" );
+    doc += i18n( "Possible Solutions:" );
+    doc += QL1S( "</h3><ul><li>" );
+    doc += solutions.join( "</li><li>" );
+    doc += QL1S( "</li></ul>" );
+  }
+
+  html.replace( QL1S("TEXT"), doc );
+
+  return html;
+}
+
+
 KWebKitPartPrivate::KWebKitPartPrivate(KWebKitPart *parent)
                    :QObject(),
                     updateHistory(true),
-                    q(parent)
+                    q(parent),
+                    statusBarWalletLabel(0),
+                    hasCachedFormData(false)
 {
 }
 
@@ -67,6 +168,8 @@ void KWebKitPartPrivate::init(QWidget *mainWidget)
             this, SLOT(slotUrlChanged(const QUrl &)));
     connect(webView, SIGNAL(linkMiddleOrCtrlClicked(const KUrl &)),
             this, SLOT(slotLinkMiddleOrCtrlClicked(const KUrl &)));
+    connect(webView, SIGNAL(selectionClipboardUrlPasted(const KUrl &)),
+            this, SLOT(slotSelectionClipboardUrlPasted(const KUrl &)));
 
     // Create the search bar...
     searchBar = new KDEPrivate::SearchBar;
@@ -103,19 +206,21 @@ void KWebKitPartPrivate::init(QWidget *mainWidget)
     connect(browserExtension, SIGNAL(saveUrl(const KUrl&)),
             webPage, SLOT(downloadUrl(const KUrl &)));
 
-    connect(webView, SIGNAL(selectionClipboardUrlPasted(const KUrl &)),
-            browserExtension, SIGNAL(openUrlRequest(const KUrl &)));
+    // Add status bar extension...
+    statusBarExtension = new KParts::StatusBarExtension(q);
 
-    KDEPrivate::PasswordBar *passwordBar = new KDEPrivate::PasswordBar(mainWidget);
+    // Create and setup the password bar...
+    KDEPrivate::PasswordBar *passwordBar = new KDEPrivate::PasswordBar(mainWidget);    
+    KWebWallet *webWallet = webPage->wallet();
 
-    // Create the password bar...
-    if (webPage->wallet()) {
-        connect (webPage->wallet(), SIGNAL(saveFormDataRequested(const QString &, const QUrl &)),
+    if (webWallet) {
+        connect (webWallet, SIGNAL(saveFormDataRequested(const QString &, const QUrl &)),
                  passwordBar, SLOT(onSaveFormData(const QString &, const QUrl &)));
         connect(passwordBar, SIGNAL(saveFormDataAccepted(const QString &)),
-                webPage->wallet(), SLOT(acceptSaveFormDataRequest(const QString &)));
+                webWallet, SLOT(acceptSaveFormDataRequest(const QString &)));
         connect(passwordBar, SIGNAL(saveFormDataRejected(const QString &)),
-                webPage->wallet(), SLOT(rejectSaveFormDataRequest(const QString &)));
+                webWallet, SLOT(rejectSaveFormDataRequest(const QString &)));
+        connect(webWallet, SIGNAL(walletClosed()), this, SLOT(slotWalletClosed()));
     }
 
     QVBoxLayout* lay = new QVBoxLayout(mainWidget);
@@ -128,18 +233,131 @@ void KWebKitPartPrivate::init(QWidget *mainWidget)
     mainWidget->setFocusProxy(webView);
 }
 
+void KWebKitPartPrivate::initActions()
+{
+    KAction *action = q->actionCollection()->addAction(KStandardAction::SaveAs, "saveDocument",
+                                                       browserExtension, SLOT(slotSaveDocument()));
+
+    action = new KAction(i18n("Save &Frame As..."), this);
+    q->actionCollection()->addAction("saveFrame", action);
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(slotSaveFrame()));
+
+    action = new KAction(KIcon("document-print-frame"), i18n("Print Frame..."), this);
+    q->actionCollection()->addAction("printFrame", action);
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(printFrame()));
+
+    action = new KAction(KIcon("zoom-in"), i18nc("zoom in action", "Zoom In"), this);
+    q->actionCollection()->addAction("zoomIn", action);
+    action->setShortcut(KShortcut("CTRL++; CTRL+="));
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(zoomIn()));
+
+    action = new KAction(KIcon("zoom-out"), i18nc("zoom out action", "Zoom Out"), this);
+    q->actionCollection()->addAction("zoomOut", action);
+    action->setShortcut(KShortcut("CTRL+-; CTRL+_"));
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(zoomOut()));
+
+    action = new KAction(KIcon("zoom-original"), i18nc("reset zoom action", "Actual Size"), this);
+    q->actionCollection()->addAction("zoomNormal", action);
+    action->setShortcut(KShortcut("CTRL+0"));
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(zoomNormal()));
+
+    action = new KAction(i18n("Zoom Text Only"), this);
+    action->setCheckable(true);
+    KConfigGroup cgHtml(KGlobal::config(), "HTML Settings");
+    bool zoomTextOnly = cgHtml.readEntry("ZoomTextOnly", false);
+    action->setChecked(zoomTextOnly);
+    q->actionCollection()->addAction("zoomTextOnly", action);
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(toogleZoomTextOnly()));
+
+    action = q->actionCollection()->addAction(KStandardAction::SelectAll, "selectAll",
+                                           browserExtension, SLOT(slotSelectAll()));
+    action->setShortcutContext(Qt::WidgetShortcut);
+    webView->addAction(action);
+
+    action = new KAction(i18n("View Do&cument Source"), this);
+    q->actionCollection()->addAction("viewDocumentSource", action);
+    action->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_U));
+    connect(action, SIGNAL(triggered(bool)), browserExtension, SLOT(slotViewDocumentSource()));
+
+    action = new KAction(i18nc("Secure Sockets Layer", "SSL"), this);
+    q->actionCollection()->addAction("security", action);
+    connect(action, SIGNAL(triggered(bool)), SLOT(slotShowSecurity()));
+
+    action = q->actionCollection()->addAction(KStandardAction::Find, "find", this, SLOT(slotShowSearchBar()));
+    action->setWhatsThis(i18nc("find action \"whats this\" text", "<h3>Find text</h3>"
+                              "Shows a dialog that allows you to find text on the displayed page."));
+
+    action = q->actionCollection()->addAction(KStandardAction::FindNext, "findnext",
+                                              searchBar, SLOT(findNext()));
+    action = q->actionCollection()->addAction(KStandardAction::FindPrev, "findprev",
+                                              searchBar, SLOT(findPrevious()));
+}
+
+
+bool KWebKitPartPrivate::handleError(const KUrl &u, QWebFrame *frame, bool handleUserAbort)
+{
+    if ( u.protocol() == "error" && u.hasSubUrl() ) {
+        /**
+         * The format of the error url is that two variables are passed in the query:
+         * error = int kio error code, errText = QString error text from kio
+         * and the URL where the error happened is passed as a sub URL.
+         */
+        KUrl::List urls = KUrl::split(u);
+
+        if ( urls.count() > 1 ) {
+            KUrl mainURL = urls.first();
+            int error = mainURL.queryItem( "error" ).toInt();
+
+            // error=0 isn't a valid error code, so 0 means it's missing from the URL
+            if ( error == 0 )
+                error = KIO::ERR_UNKNOWN;
+
+            if (handleUserAbort && error == KIO::ERR_USER_CANCELED) {
+                webView->setUrl(webView->url());
+                emit browserExtension->setLocationBarUrl(KUrl(webView->url()).prettyUrl());
+            } else {
+                const QString errorText = mainURL.queryItem( "errText" );
+                urls.pop_front();
+                KUrl reqUrl = KUrl::join( urls );
+                emit browserExtension->setLocationBarUrl(reqUrl.prettyUrl());                
+                frame->setHtml(htmlError(error, errorText, reqUrl));
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 void KWebKitPartPrivate::slotLoadStarted()
 {
     emit q->started(0);
+    slotWalletClosed();
 }
 
 void KWebKitPartPrivate::slotLoadFinished(bool ok)
 {
     updateHistory = true;
 
-    if (ok) {
-        if (WebKitSettings::self()->isFormCompletionEnabled() && webPage->wallet()) {
-            webPage->wallet()->fillFormData(webPage->mainFrame());
+    if (ok) {      
+        KWebWallet *webWallet = webPage->wallet();
+        if (webWallet) {
+            webWallet->fillFormData(webPage->mainFrame());
+            KWebWallet::WebFormList list = webWallet->formsWithCachedData(webPage->mainFrame());
+            if (!list.isEmpty()) {
+                if (!statusBarWalletLabel) {
+                    statusBarWalletLabel = new KUrlLabel(statusBarExtension->statusBar());
+                    statusBarWalletLabel->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Minimum));
+                    statusBarWalletLabel->setUseCursor(false);
+                    statusBarWalletLabel->setPixmap(SmallIcon("wallet-open"));
+                    connect(statusBarWalletLabel, SIGNAL(leftClickedUrl()), SLOT(slotLaunchWalletManager()));
+                    connect(statusBarWalletLabel, SIGNAL(rightClickedUrl()), SLOT(slotShowWalletMenu()));
+                }
+
+                statusBarExtension->addStatusBarItem(statusBarWalletLabel, 0, false);
+                hasCachedFormData = true;
+            }
         }
 
         QString linkStyle;
@@ -164,8 +382,8 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
             webPage->mainFrame()->documentElement().setAttribute(QL1S("style"), linkStyle);
         }
 
-        // Restore page state as necessary...
-        webPage->restoreAllFrameState();
+        // Restore page state...
+        webPage->restoreFrameStates();
 
         if (webView->title().trimmed().isEmpty()) {
             // If the document title is empty, then set it to the current url
@@ -223,23 +441,23 @@ void  KWebKitPartPrivate::slotNavigationRequestFinished(const KUrl& url, QWebFra
 {
     if (frame) {
 
-        if (q->handleError(url, frame)) {
+        if (handleError(url, frame)) {
             return;
         }
 
         if (frame == webPage->mainFrame()) {
-            if (webPage->sslInfo().isValid())
+            if (webPage->sslInfo().isValid()) {
                 browserExtension->setPageSecurity(KWebKitPartPrivate::Encrypted);
-            else
+            } else {
                 browserExtension->setPageSecurity(KWebKitPartPrivate::Unencrypted);
+            }
         }
     }
 }
 
 void KWebKitPartPrivate::slotUrlChanged(const QUrl& url)
 {
-    kDebug() << url << q->url();
-    if (url.toString() != QL1S("about:blank")) {
+    if (!url.isEmpty() && url.scheme() != QL1S("error") && url.toString() != QL1S("about:blank")) {
         q->setUrl(url);
         emit browserExtension->setLocationBarUrl(KUrl(url).prettyUrl());
     }
@@ -248,7 +466,7 @@ void KWebKitPartPrivate::slotUrlChanged(const QUrl& url)
 void KWebKitPartPrivate::slotShowSecurity()
 {
     if (webPage->sslInfo().isValid()) {
-        KSslInfoDialog *dlg = new KSslInfoDialog;
+        KSslInfoDialog *dlg = new KSslInfoDialog (q->widget());
         dlg->setSslInfo(webPage->sslInfo().certificateChain(),
                         webPage->sslInfo().peerAddress().toString(),
                         q->url().host(),
@@ -258,7 +476,7 @@ void KWebKitPartPrivate::slotShowSecurity()
                         webPage->sslInfo().supportedChiperBits(),
                         KSslInfoDialog::errorsFromString(webPage->sslInfo().certificateErrors()));
 
-        dlg->exec();
+        dlg->open();
     } else {
         KMessageBox::information(0, i18n("The SSL information for this site "
                                          "appears to be corrupt."), i18nc("Secure Sockets Layer", "SSL"));
@@ -326,6 +544,11 @@ void KWebKitPartPrivate::slotLinkHovered(const QString &link, const QString &tit
         } else {
             message = link;
             QWebElementCollection collection = webPage->mainFrame()->documentElement().findAll(QL1S("a[href]"));
+            QListIterator<QWebFrame *> framesIt (webPage->mainFrame()->childFrames());
+            while (framesIt.hasNext()) {
+                collection += framesIt.next()->documentElement().findAll(QL1S("a[href]"));
+            }
+
             Q_FOREACH(const QWebElement &element, collection) {
                 //kDebug() << "link:" << link << "href" << element.attribute(QL1S("href"));
                 if (element.hasAttribute(QL1S("target")) &&
@@ -351,37 +574,93 @@ void KWebKitPartPrivate::slotLinkHovered(const QString &link, const QString &tit
 }
 
 void KWebKitPartPrivate::slotSearchForText(const QString &text, bool backward)
-{
-    QWebPage::FindFlags flags;
+{   
+    QWebPage::FindFlags flags = QWebPage::FindWrapsAroundDocument;
 
     if (backward)
-        flags = QWebPage::FindBackward;
+        flags |= QWebPage::FindBackward;
 
     if (searchBar->caseSensitive())
         flags |= QWebPage::FindCaseSensitively;
 
+    if (searchBar->highlightMatches())
+        flags |= QWebPage::HighlightAllOccurrences;
+
+    kDebug() << "search for text:" << text << ", backward ?" << backward;
     searchBar->setFoundMatch(webView->page()->findText(text, flags));
 }
 
 void KWebKitPartPrivate::slotShowSearchBar()
 {
     const QString text = webView->selectedText();
-
-    if (text.isEmpty())
-        webView->pageAction(QWebPage::Undo);
-    else
-        searchBar->setSearchText(text.left(150));
-
-    searchBar->show();
+    searchBar->setSearchText(text.left(150));
 }
 
 void KWebKitPartPrivate::slotLinkMiddleOrCtrlClicked(const KUrl& linkUrl)
 {
     KParts::OpenUrlArguments args;
     args.setActionRequestedByUser(true);
-    args.metaData()["referrer"] = q->url().url();
-
     emit browserExtension->createNewWindow(linkUrl, args);
+}
+
+void KWebKitPartPrivate::slotSelectionClipboardUrlPasted(const KUrl& selectedUrl)
+{
+    if (WebKitSettings::self()->isOpenMiddleClickEnabled())
+        emit browserExtension->openUrlRequest(selectedUrl);
+}
+
+void KWebKitPartPrivate::slotWalletClosed()
+{
+    if (statusBarWalletLabel) {
+        statusBarExtension->removeStatusBarItem(statusBarWalletLabel);
+        delete statusBarWalletLabel;
+        statusBarWalletLabel = 0;
+        hasCachedFormData = false;
+    }
+}
+
+void KWebKitPartPrivate::slotShowWalletMenu()
+{
+    KMenu *menu = new KMenu(0);
+
+    if (webView && WebKitSettings::self()->isNonPasswordStorableSite(webView->url().host())) {
+      menu->addAction(i18n("&Allow password caching for this site"), this, SLOT(slotDeleteNonPasswordStorableSite()));
+    }
+
+    if (webPage && hasCachedFormData) {
+      menu->addAction(i18n("Remove all cached passwords for this site"), this, SLOT(slotRemoveCachedPasswords()));
+    }
+
+    menu->addSeparator();
+    menu->addAction(i18n("&Close Wallet"), this, SLOT(slotWalletClosed()));
+
+    KAcceleratorManager::manage(menu);
+    menu->popup(QCursor::pos());
+}
+
+void KWebKitPartPrivate::slotLaunchWalletManager()
+{
+    QDBusInterface r("org.kde.kwalletmanager", "/kwalletmanager/MainWindow_1", "org.kde.KMainWindow");
+    if (r.isValid()) {
+        r.call(QDBus::NoBlock, "show");
+        r.call(QDBus::NoBlock, "raise");
+    } else {
+        KToolInvocation::startServiceByDesktopName("kwalletmanager_show");
+    }
+}
+
+void KWebKitPartPrivate::slotDeleteNonPasswordStorableSite()
+{
+    if (webView)
+        WebKitSettings::self()->removeNonPasswordStorableSite(webView->url().host());
+}
+
+void KWebKitPartPrivate::slotRemoveCachedPasswords()
+{
+    if (webPage && webPage->wallet()) {
+        webPage->wallet()->removeFormData(webPage->mainFrame(), true);
+        hasCachedFormData = false;
+    }
 }
 
 #include "kwebkitpart_p.moc"
