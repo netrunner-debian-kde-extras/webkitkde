@@ -3,6 +3,11 @@
 include /usr/share/pkg-kde-tools/makefiles/1/variables.mk
 #export DH_VERBOSE=1
 
+ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(NUMJOBS)
+endif
+
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
@@ -21,7 +26,7 @@ build: build-stamp
 build-stamp: configure-stamp
 	dh_testdir
 
-	$(MAKE) -C build
+	$(MAKE) $(MAKEFLAGS) -C build
 
 	touch $@
 
