@@ -135,7 +135,7 @@ bool KWebKitPart::openUrl(const KUrl &u)
 
         if ( urls.count() > 1 ) {
             KUrl mainURL = urls.first();
-            int error = convertStr2Int(mainURL.queryItem("error"));
+            int error = mainURL.queryItem( "error" ).toInt();
 
             // error=0 isn't a valid error code, so 0 means it's missing from the URL
             if ( error == 0 )
