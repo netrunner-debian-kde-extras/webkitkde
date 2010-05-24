@@ -1,3 +1,9 @@
+webkitkde (0.9svn1129464-1) UNRELEASED; urgency=low
+
+  * New upstream version.
+
+ -- Adrian von Bidder <cmot@debian.org>  Mon, 24 May 2010 21:04:57 +0200
+
 webkitkde (0.9svn1123738-1) unstable; urgency=low
 
   * New upstream version.
@@ -5,7 +11,7 @@ webkitkde (0.9svn1123738-1) unstable; urgency=low
   * Upload to unstable
 
  -- Adrian von Bidder <cmot@debian.org>  Sun, 09 May 2010 15:56:13 +0200
-
+ 
 webkitkde (0.9svn1101082-1) experimental; urgency=low
 
   * New upstream version.
