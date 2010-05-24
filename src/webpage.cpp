@@ -410,6 +410,7 @@ QWebPage *WebPage::createWindow(WebWindowType type)
 void WebPage::slotUnsupportedContent(QNetworkReply *reply)
 {
     Q_ASSERT (reply);
+
     const KIO::MetaData metaData = reply->attribute(static_cast<QNetworkRequest::Attribute>(KIO::AccessManager::MetaData)).toMap();
     bool hasContentDisposition;
     if (metaData.isEmpty())
@@ -417,8 +418,8 @@ void WebPage::slotUnsupportedContent(QNetworkReply *reply)
     else
         hasContentDisposition = metaData.contains("content-disposition-filename");
 
-    KParts::OpenUrlArguments args;
-    const KUrl url(reply->url());
+    if (hasContentDisposition) {
+    // Workaround for no support for Content-Disposition in
     // QtWebkit < 2.0 (Qt 4.7).
 #if KDE_IS_VERSION(4,4,75)
         downloadResponse(reply);
