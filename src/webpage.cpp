@@ -162,7 +162,6 @@ static bool domainSchemeMatch(const QUrl& u1, const QUrl& u2)
 static void restoreStateFor(QWebFrame *frame, const WebFrameState &frameState)
 {
     Q_ASSERT(frame);
-
     frame->setScrollPosition(QPoint(frameState.scrollPosX, frameState.scrollPosY));
     QHashIterator<QString, QString> it (frameState.formData);
     while (it.hasNext()) {
@@ -171,8 +170,7 @@ static void restoreStateFor(QWebFrame *frame, const WebFrameState &frameState)
         if (element.isNull())
             kWarning() << "Found no element that matches:" << it.key();
         else
-            element.evaluateJavaScript(QString::fromLatin1("if(this.value.length == 0) this.value=\"%1\";")
-                                       .arg(it.value()));           
+            element.evaluateJavaScript(it.value());
     }
 }
 
@@ -790,9 +788,9 @@ QString WebPage::errorPage(int code, const QString& text, const KUrl& reqUrl) co
   QString filename( KStandardDirs::locate( "data", "kwebkitpart/error.html" ) );
   QFile file( filename );
   if ( !file.open( QIODevice::ReadOnly ) )
-    return i18n("<html><body><h3>Unable to display error message!</h3>"
+    return i18n("<html><body><h3>Unable to display error message</h3>"
                 "<p>The error template file <em>error.html</em> could not be "
-                "found!</p></body></html>");
+                "found.</p></body></html>");
 
   QString html = QString( QL1S( file.readAll() ) );
 
