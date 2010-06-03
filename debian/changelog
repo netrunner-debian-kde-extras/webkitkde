@@ -1,8 +1,9 @@
 webkitkde (0.9svn1133684-1) unstable; urgency=low
 
   * New upstream version.
+  * Add pkg-kde-tools to build dependencies (Closes: #584389)
 
- -- Adrian von Bidder <cmot@debian.org>  Thu, 03 Jun 2010 12:42:34 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Thu, 03 Jun 2010 12:46:08 +0200
 
 webkitkde (0.9svn1123738-1) unstable; urgency=low
 
