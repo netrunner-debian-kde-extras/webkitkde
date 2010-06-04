@@ -2,7 +2,7 @@ Source: webkitkde
 Section: web
 Priority: optional
 Maintainer: Adrian von Bidder <cmot@debian.org>
-Build-Depends: cmake, debhelper (>= 7), libwebkit-dev, kdelibs5-dev (>= 4:4.4), pkg-kde-tools
+Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev (>= 4:4.4), pkg-kde-tools
 Standards-Version: 3.8.4
 Homepage: http://techbase.kde.org/Projects/WebKit
 Vcs-Browser: https://fortytwo.ch/hg/pkg-webkitkde
@@ -48,4 +48,4 @@ Description: KDE bindings for WebKit, Development files
  KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
  .
- This package contains the debugging synmbols needed for software development.
+ This package contains the debugging symbols needed for software development.
