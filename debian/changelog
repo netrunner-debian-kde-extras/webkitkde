@@ -1,8 +1,12 @@
-webkitkde (0.9svn1133684-2) UNRELEASED; urgency=low
+webkitkde (0.9svn1136920-1) UNRELEASED; urgency=low
 
+  * New upstream version.
+    - fixes konqueror history handling
+    - warn before closing tab with unsent form data
   * Fixes from Ubuntu (typo, drop build-dependency on libwebkit-dev)
+  * History fixes require soname change
 
- -- Adrian von Bidder <cmot@debian.org>  Fri, 04 Jun 2010 14:16:29 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Sat, 12 Jun 2010 12:34:56 +0200
 
 webkitkde (0.9svn1133684-1) unstable; urgency=low
 
