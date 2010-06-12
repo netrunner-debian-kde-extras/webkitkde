@@ -8,7 +8,7 @@
 ^debian/.*\.substvars$
 ^debian/files$
 ^debian/kpart-webkit/
-^debian/libkwebkit1/
+^debian/libkwebkit0.9.5/
 ^debian/libkwebkit-dbg/
 ^debian/libkwebkit-dev/
 ^debian/patches/
