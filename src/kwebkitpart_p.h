@@ -54,7 +54,8 @@ public:
     void init (QWidget *widget);
     void initActions();
 
-    bool updateHistory;
+    bool emitOpenUrlNotify;
+    bool contentModified;
     QPointer<WebView> webView;
     QPointer<WebPage> webPage;
     QPointer<KDEPrivate::SearchBar> searchBar;
@@ -65,12 +66,14 @@ private Q_SLOTS:
     void slotShowSecurity();
     void slotShowSearchBar();
     void slotLoadStarted();
+    void slotContentsChanged();
     void slotLoadFinished(bool);
     void slotLoadAborted(const KUrl &);
 
     void slotSearchForText(const QString &text, bool backward);
     void slotLinkHovered(const QString &, const QString&, const QString &);
     void slotSaveFrameState(QWebFrame *frame, QWebHistoryItem *item);
+    void slotRestoreFrameState(QWebFrame *frame);
     void slotLinkMiddleOrCtrlClicked(const KUrl&);
     void slotSelectionClipboardUrlPasted(const KUrl&);
 
@@ -84,7 +87,7 @@ private Q_SLOTS:
 private:
     KWebKitPart *q;
     KUrlLabel *statusBarWalletLabel;
-    bool hasCachedFormData;
+    bool hasCachedFormData;    
 };
 
 #endif // KWEBKITPART_P_H
