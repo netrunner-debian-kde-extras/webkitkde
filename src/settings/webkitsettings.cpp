@@ -661,6 +661,9 @@ void WebKitSettings::init( KConfig * config, bool reset )
   }
 
   // Sync with QWebSettings.
+  if (!d->m_encoding.isEmpty())
+      QWebSettings::globalSettings()->setDefaultTextEncoding(d->m_encoding);
+
   if (!userStyleSheet().isEmpty()) {
       QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl(userStyleSheet()));
   }
@@ -802,7 +805,7 @@ void WebKitSettings::addAdFilter( const QString &url )
     KConfigGroup config = KSharedConfig::openConfig( "khtmlrc", KConfig::NoGlobals )->group( "Filter Settings" );
 
     QRegExp rx;
-    
+
     // Try compiling to avoid invalid stuff. Only support the basic syntax here...
     // ### refactor somewhat
     if (url.length()>2 && url[0]=='/' && url[url.length()-1] == '/')

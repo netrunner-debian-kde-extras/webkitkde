@@ -33,6 +33,7 @@
 
 #include <kwebwallet.h>
 #include <kdeversion.h>
+#include <kcodecaction.h>
 #include <KDE/KLocalizedString>
 #include <KDE/KStringHandler>
 #include <KDE/KMessageBox>
@@ -51,6 +52,7 @@
 #include <KParts/StatusBarExtension>
 
 #include <QtCore/QFile>
+#include <QtCore/QTextCodec>
 #include <QtGui/QVBoxLayout>
 #include <QtDBus/QDBusInterface>
 #include <QtWebKit/QWebFrame>
@@ -126,7 +128,7 @@ void KWebKitPartPrivate::init(QWidget *mainWidget)
     statusBarExtension = new KParts::StatusBarExtension(q);
 
     // Create and setup the password bar...
-    KDEPrivate::PasswordBar *passwordBar = new KDEPrivate::PasswordBar(mainWidget);    
+    KDEPrivate::PasswordBar *passwordBar = new KDEPrivate::PasswordBar(mainWidget);
     KWebWallet *webWallet = webPage->wallet();
 
     if (webWallet) {
@@ -190,6 +192,10 @@ void KWebKitPartPrivate::initActions()
     action->setShortcutContext(Qt::WidgetShortcut);
     webView->addAction(action);
 
+    KCodecAction *codecAction = new KCodecAction( KIcon("character-set"), i18n( "Set &Encoding" ), this, true );
+    q->actionCollection()->addAction( "setEncoding", codecAction );
+    connect(codecAction, SIGNAL(triggered(QTextCodec*)), SLOT(slotSetTextEncoding(QTextCodec*)));
+
     action = new KAction(i18n("View Do&cument Source"), this);
     q->actionCollection()->addAction("viewDocumentSource", action);
     action->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_U));
@@ -211,6 +217,7 @@ void KWebKitPartPrivate::initActions()
 
 void KWebKitPartPrivate::slotLoadStarted()
 {
+    kDebug();
     emit q->started(0);
     slotWalletClosed();
     contentModified = false;
@@ -225,10 +232,10 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
 {
     emitOpenUrlNotify = true;
 
-    if (ok) {      
+    if (ok) {
         QString linkStyle;
-
         QColor linkColor = WebKitSettings::self()->vLinkColor();
+
         if (linkColor.isValid())
             linkStyle += QString::fromLatin1("a:visited {color: rgb(%1,%2,%3);}\n")
                          .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
@@ -238,15 +245,13 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
             linkStyle += QString::fromLatin1("a:active {color: rgb(%1,%2,%3);}\n")
                          .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
 
-        if (WebKitSettings::self()->underlineLink()) {
+        if (WebKitSettings::self()->underlineLink())
             linkStyle += QL1S("a:link {text-decoration:underline;}\n");
-        } else if (WebKitSettings::self()->hoverLink()) {
+        else if (WebKitSettings::self()->hoverLink())
             linkStyle += QL1S("a:hover {text-decoration:underline;}\n");
-        }
 
-        if (!linkStyle.isEmpty()) {
+        if (!linkStyle.isEmpty())
             webPage->mainFrame()->documentElement().setAttribute(QL1S("style"), linkStyle);
-        }
 
         if (webView->title().trimmed().isEmpty()) {
             // If the document title is empty, then set it to the current url
@@ -279,6 +284,14 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
                 hasCachedFormData = true;
             }
         }
+
+        // Set the favicon specified through the <link> tag...
+        const QWebElement element = webPage->mainFrame()->findFirstElement(QL1S("head>link[rel=icon]"));
+        const QString href = element.attribute("href");
+        if (!element.isNull()) {
+            kDebug() << "Setting favicon to" << href;
+            browserExtension->setIconUrl(KUrl(href));
+        }
     }
 
     /*
@@ -294,7 +307,7 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
             webPage->triggerAction(QWebPage::StopScheduledPageRefresh);
     }
 #endif
-    emit q->completed(pending);
+    emit q->completed((ok && pending));
 }
 
 void KWebKitPartPrivate::slotLoadAborted(const KUrl & url)
@@ -438,7 +451,7 @@ void KWebKitPartPrivate::slotLinkHovered(const QString &link, const QString &tit
 }
 
 void KWebKitPartPrivate::slotSearchForText(const QString &text, bool backward)
-{   
+{
     QWebPage::FindFlags flags = QWebPage::FindWrapsAroundDocument;
 
     if (backward)
@@ -523,6 +536,19 @@ void KWebKitPartPrivate::slotRemoveCachedPasswords()
     if (webPage && webPage->wallet()) {
         webPage->wallet()->removeFormData(webPage->mainFrame(), true);
         hasCachedFormData = false;
+    }
+}
+
+void KWebKitPartPrivate::slotSetTextEncoding(QTextCodec * codec)
+{
+    if (webPage) {
+        QWebSettings *localSettings = webPage->settings();
+        if (localSettings) {
+            kDebug() << codec->name();
+            localSettings->setDefaultTextEncoding(codec->name());
+            q->openUrl(q->url());
+            //webPage->triggerAction(QWebPage::Reload);
+        }
     }
 }
 

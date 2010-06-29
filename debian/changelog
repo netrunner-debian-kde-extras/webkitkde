@@ -1,3 +1,10 @@
+webkitkde (0.9svn1143138-1) unstable; urgency=low
+
+  * New upstream version.
+  * kdenetwork has migrated to testing, upload to unstable
+
+ -- Adrian von Bidder <cmot@debian.org>  Tue, 29 Jun 2010 07:20:17 +0200
+
 webkitkde (0.9svn1136920-1) experimental; urgency=low
 
   * experimental: wait for kdenetwork to be in squeeze
@@ -23,7 +30,7 @@ webkitkde (0.9svn1123738-1) unstable; urgency=low
   * Upload to unstable
 
  -- Adrian von Bidder <cmot@debian.org>  Sun, 09 May 2010 15:56:13 +0200
- 
+
 webkitkde (0.9svn1101082-1) experimental; urgency=low
 
   * New upstream version.
