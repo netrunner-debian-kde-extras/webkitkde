@@ -28,10 +28,10 @@
 #include "websslinfo.h"
 #include "settings/webkitsettings.h"
 
+#include <KDE/KAction>
 #include <KDE/KUriFilterData>
 #include <KDE/KDesktopFile>
 #include <KDE/KConfigGroup>
-#include <KDE/KTemporaryFile>
 #include <KDE/KToolInvocation>
 #include <KDE/KFileDialog>
 #include <KDE/KIO/NetAccess>
@@ -40,6 +40,8 @@
 #include <KDE/KRun>
 #include <KDE/KDebug>
 #include <KDE/KPrintPreview>
+#include <KDE/KStandardDirs>
+#include <kdeversion.h>
 
 #include <QtCore/QPointer>
 #include <QtGui/QClipboard>
@@ -47,138 +49,21 @@
 #include <QtGui/QPrinter>
 #include <QtGui/QPrintPreviewDialog>
 #include <QtWebKit/QWebFrame>
+#include <QtWebKit/QWebHistory>
 #include <QtWebKit/QWebElement>
 #include <QtWebKit/QWebElementCollection>
 
 #define QL1S(x)     QLatin1String(x)
 #define QL1C(x)     QLatin1Char(x)
 
-static void createSelector(QString& selector, const QWebElement& element, bool useValueAttr = false)
-{
-    QString temp;
-    if (element.parent().isNull())
-        selector = element.tagName();
-    else
-        selector = element.parent().tagName() + QL1S(" > ") + element.tagName();
-    temp = element.attribute(QL1S("name"));
-    if (!temp.isEmpty())
-        selector += QString::fromLatin1("[name=\"%1\"]").arg(temp);
-    temp = element.attribute(QL1S("class"));
-    if (!temp.isEmpty())
-       selector += QString::fromLatin1("[class=\"%1\"]").arg(temp);
-    temp = element.attribute(QL1S("id"));
-    if (!temp.isEmpty())
-       selector += QString::fromLatin1("[id=\"%1\"]").arg(temp);
-    if (useValueAttr) {
-        temp = element.attribute(QL1S("value"));
-        if (!temp.isEmpty())
-            selector += QString::fromLatin1("[value=\"%1\"]").arg(temp);
-    }
-}
-
-static void addElementData(QStringList &formData, const QWebElementCollection &collection,
-                           const QString& valueAttr, bool escapeValue = true,
-                           const QString& query = QString(), const QString& queryValue = QString())
-{   
-    QString selector;
-    const int count = collection.count();
-    const bool useValueAttr = !valueAttr.contains("this.value");
-
-    if (!query.isEmpty() && !queryValue.isEmpty()) {
-        QString temp;
-        for(int i=0; i < count; ++i) {
-            createSelector(selector, collection.at(i), useValueAttr);
-            QWebElementCollection queryCollection = collection.at(i).findAll(query);
-            for(int j=0; j < queryCollection.count(); ++j) {
-                const QString attribute = queryCollection.at(j).evaluateJavaScript(queryValue).toString().trimmed();
-                temp = selector;
-                temp += QL1C(',');
-                if (escapeValue)
-                    temp += valueAttr.arg(j).arg(QString::fromLatin1("=unescape(\"%1\")").arg(attribute));
-                else
-                    temp += valueAttr.arg(j).arg(attribute);
-                //kDebug() << "Saving form data:" << temp;
-                formData << temp;
-            }
-        }
-    } else {
-        for(int i=0; i < count; ++i) {
-            const QString attribute = collection.at(i).evaluateJavaScript(valueAttr).toString().trimmed();
-            if (!attribute.isEmpty()) {
-                createSelector(selector, collection.at(i), useValueAttr);
-                selector += QL1C(',');
-                selector += valueAttr;
-                if (escapeValue) {
-                    selector += QL1S("=unescape(\"");
-                    selector += QUrl::toPercentEncoding(attribute.toUtf8(), " ");
-                    selector += QL1S("\")");
-                } else {
-                    selector += QL1C('=');
-                    selector += attribute;
-                }
-                //kDebug() << "Saving form data:" << selector;
-                formData << selector;
-            }
-        }
-    }
-}
-
-static QString getFormDataFor(const QWebFrame *frame)
-{
-    QStringList formData;
-    if (frame) {
-        // Selector for <input type="text">, <input type=file> and <textarea>
-        QString selector = QL1S("input[type=text]:not([readonly]):not([disabled]),"
-                                "input[type=file]:not([readonly]):not([disabled]),"
-                                "input:not([type]):not([disabled]),"
-                                "textarea:not([readonly]):not([disabled])");
-        addElementData(formData, frame->findAllElements(selector),
-                       QL1S("this.value"));
-
-        // Selector for <input type=checkbox>
-        selector = QL1S("input[type=checkbox]:not([readonly]):not([disabled]),"
-                        "input[type=radio]:not([readonly]):not([disabled])");
-        addElementData(formData, frame->findAllElements(selector),
-                       QL1S("this.checked"), false);
-
-        // Selector for <select><option> (a combobox)
-        selector = QL1S("select:not([multiple])");
-        addElementData(formData, frame->findAllElements(selector),
-                       QL1S("this.selectedIndex"), false);
-
-        selector = QL1S("select[multiple]");
-        addElementData(formData, frame->findAllElements(selector),
-                       QL1S("this.options[%1].selected=%2"), false,
-                       QL1S("option"), QL1S("this.selected"));
-    }
-
-    return formData.join(QL1S(";"));
-}
-
-
-static QStringList getChildrenFrameState(const QWebFrame *frame)
-{
-    QStringList info;
-    if (frame) {
-        QListIterator <QWebFrame*> it (frame->childFrames());
-        while (it.hasNext()) {
-            QWebFrame* childFrame = it.next();
-            info << childFrame->frameName();
-            info << childFrame->url().toString();
-            info << QString::number(childFrame->scrollPosition().x());
-            info << QString::number(childFrame->scrollPosition().y());
-            info << getFormDataFor(frame);
-        }
-    }
-
-    return info;
-}
-
 class WebKitBrowserExtension::WebKitBrowserExtensionPrivate
 {
  public:
+    WebKitBrowserExtensionPrivate() {}
+
     QPointer<KWebKitPart> part;
     QPointer<WebView> view;
+    QFile* historyFile;
 };
 
 WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent)
@@ -187,6 +72,7 @@ WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent)
 {
     d->part = parent;
     d->view = qobject_cast<WebView*>(parent->view());
+    d->historyFile = new QFile(KStandardDirs::locateLocal("data", "kwebkitpart/autosave/history"));
 
     enableAction("cut", false);
     enableAction("copy", false);
@@ -196,12 +82,16 @@ WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent)
 
 WebKitBrowserExtension::~WebKitBrowserExtension()
 {
+    // If the history file is empty, remove it.
+    if (d->historyFile->size() == 0)
+        d->historyFile->remove();
+    delete d->historyFile;
     delete d;
 }
 
 int WebKitBrowserExtension::xOffset()
 {
-    if (d->view->page())
+    if (d->view)
         return d->view->page()->mainFrame()->scrollPosition().x();
 
     return KParts::BrowserExtension::xOffset();
@@ -209,7 +99,7 @@ int WebKitBrowserExtension::xOffset()
 
 int WebKitBrowserExtension::yOffset()
 {
-    if (d->view->page())
+    if (d->view)
         return d->view->page()->mainFrame()->scrollPosition().y();
 
     return KParts::BrowserExtension::yOffset();
@@ -217,76 +107,60 @@ int WebKitBrowserExtension::yOffset()
 
 void WebKitBrowserExtension::saveState(QDataStream &stream)
 {
-    QVariant sslinfo;
-    QString formData;
-    QStringList childFrameState;
-
-    if (d->view) {
-        WebPage *page = qobject_cast<WebPage*>(d->view->page());
-
-        if (page) {
-            // Save the SSL information...
-            sslinfo = page->sslInfo().toMetaData();
-
-            // Save the state (name, url, scroll position) for all frames...
-            childFrameState = getChildrenFrameState(page->mainFrame());
-
-            // Save the data typed into forms...
-            formData = getFormDataFor(page->mainFrame());
-            //kDebug() << "Saving form data:" << formData;
-        }
-    }
-
     stream << d->part->url()
            << static_cast<qint32>(xOffset())
            << static_cast<qint32>(yOffset())
-           << formData
-           << sslinfo
-           << childFrameState;
+           << static_cast<qint32>(d->view->page()->history()->currentItemIndex());
+
+    // Save the QtWebKit history into its own file...
+    if (d->historyFile->isWritable() || d->historyFile->open(QIODevice::WriteOnly)) {
+        d->historyFile->seek(0);  // do not append, but rewrite...
+        QDataStream output (d->historyFile);
+        output << *(d->view->page()->history());
+    } else {
+        kDebug() << "Unable to open history file:" <<  d->historyFile->fileName();
+    }
 }
 
 void WebKitBrowserExtension::restoreState(QDataStream &stream)
-{  
+{
     KUrl u;
-    qint32 xOfs, yOfs;
-    QVariant sslinfo;
-    QString formData;
-    KIO::MetaData metaData;
+    qint32 xOfs, yOfs,historyItemIndex;
     KParts::OpenUrlArguments args;
-    KParts::BrowserArguments bargs;
 
-    stream >> u >> xOfs >> yOfs >> formData >> sslinfo >> bargs.docState;
-
-    if (sslinfo.isValid() && sslinfo.type() == QVariant::Map)
-        metaData += sslinfo.toMap();
-
-    args.setXOffset(xOfs);
-    args.setYOffset(yOfs);
-    args.metaData() = metaData;
-    args.metaData().insert(QL1S("kwebkitpart-restore-state"), QString());
-    args.metaData().insert(QL1S("kwebkitpart-saved-form-data"), formData);
-
+    stream >> u >> xOfs >> yOfs >> historyItemIndex;
+    args.metaData().insert(QL1S("kwebkitpart-restore-state"), QString::number(historyItemIndex));
     d->part->setArguments(args);
-    d->part->browserExtension()->setBrowserArguments(bargs);
     d->part->openUrl(u);
+}
+
+void WebKitBrowserExtension::restoreHistory()
+{
+    // If the history file is open, we are already saving history data ; so we
+    // ignore any restore history requests.
+    if (!d->historyFile->isOpen() && d->historyFile->open(QIODevice::ReadOnly)) {
+        QDataStream stream (d->historyFile);
+        stream >> *(d->view->page()->history());
+        d->historyFile->close();
+    }
 }
 
 void WebKitBrowserExtension::cut()
 {
     if (d->view)
-        d->view->page()->triggerAction(QWebPage::Cut);
+        d->view->triggerPageAction(QWebPage::Cut);
 }
 
 void WebKitBrowserExtension::copy()
 {
     if (d->view)
-        d->view->page()->triggerAction(QWebPage::Copy);
+        d->view->triggerPageAction(QWebPage::Copy);
 }
 
 void WebKitBrowserExtension::paste()
 {
     if (d->view)
-        d->view->page()->triggerAction(QWebPage::Paste);
+        d->view->triggerPageAction(QWebPage::Paste);
 }
 
 void WebKitBrowserExtension::slotSaveDocument()
@@ -324,20 +198,32 @@ void WebKitBrowserExtension::printFrame()
 void WebKitBrowserExtension::updateEditActions()
 {
     if (d->view) {
-        QWebPage *page = d->view->page();
-        enableAction("cut", page->action(QWebPage::Cut));
-        enableAction("copy", page->action(QWebPage::Copy));
-        enableAction("paste", page->action(QWebPage::Paste));
+        enableAction("cut", d->view->pageAction(QWebPage::Cut));
+        enableAction("copy", d->view->pageAction(QWebPage::Copy));
+        enableAction("paste", d->view->pageAction(QWebPage::Paste));
     }
 }
 
 void WebKitBrowserExtension::searchProvider()
 {
     if (d->view) {
+        KUrl url;
+#if KDE_IS_VERSION(4,4,86)
+        KAction *action = qobject_cast<KAction*>(sender());
+        if (action) {
+            url = action->data().toUrl();
+            if (url.host().isEmpty()) {
+                KUriFilterData data;
+                data.setData(action->data().toString());
+                if (KUriFilter::self()->filterUri(data, QStringList() << QL1S("kurisearchfilter")))
+                    url = data.uri();
+            }
+        }
+#else
         // action name is of form "previewProvider[<searchproviderprefix>:]"
         const QString searchProviderPrefix = QString(sender()->objectName()).mid(14);
 
-        const QString text = d->view->page()->selectedText();
+        const QString text = d->view->selectedText();
         KUriFilterData data;
         QStringList list;
         data.setData(searchProviderPrefix + text);
@@ -350,10 +236,11 @@ void WebKitBrowserExtension::searchProvider()
             data.setData(cg.readEntry("Query").replace("\\{@}", encodedSearchTerm));
         }
 
+        url = data.uri();
+#endif
         KParts::BrowserArguments browserArgs;
         browserArgs.frameName = "_blank";
-
-        emit openUrlRequest(data.uri(), KParts::OpenUrlArguments(), browserArgs);
+        emit openUrlRequest(url, KParts::OpenUrlArguments(), browserArgs);
     }
 }
 
@@ -364,7 +251,7 @@ void WebKitBrowserExtension::reparseConfiguration()
 }
 
 void WebKitBrowserExtension::zoomIn()
-{  
+{
     if (d->view)
         d->view->setZoomFactor(d->view->zoomFactor() + 0.1);
 }
@@ -396,7 +283,7 @@ void WebKitBrowserExtension::toogleZoomTextOnly()
 void WebKitBrowserExtension::slotSelectAll()
 {
     if (d->view)
-        d->view->page()->triggerAction(QWebPage::SelectAll);
+        d->view->triggerPageAction(QWebPage::SelectAll);
 }
 
 void WebKitBrowserExtension::slotFrameInWindow()
@@ -436,15 +323,6 @@ void WebKitBrowserExtension::slotReloadFrame()
 void WebKitBrowserExtension::slotSaveImageAs()
 {
     if (d->view) {
-/*
-        QList<KUrl> urls;
-        urls.append(d->view->contextMenuResult().imageUrl());
-        const int nbUrls = urls.count();
-        for (int i = 0; i != nbUrls; i++) {
-            QString file = KFileDialog::getSaveFileName(KUrl(), QString(), d->part->widget());
-            KIO::NetAccess::file_copy(urls.at(i), file, d->part->widget());
-        }
-*/
         d->view->triggerPageAction(QWebPage::DownloadImageToDisk);
     }
 }
@@ -514,31 +392,15 @@ void WebKitBrowserExtension::slotSaveLinkAs()
 void WebKitBrowserExtension::slotViewDocumentSource()
 {
     if (d->view) {
-        //TODO test http requests
-        KUrl currentUrl(d->view->page()->mainFrame()->url());
-        bool isTempFile = false;
-    #if 0
-        if (!(currentUrl.isLocalFile())/* && KHTMLPageCache::self()->isComplete(d->m_cacheId)*/) { //TODO implement
-            KTemporaryFile sourceFile;
-    //         sourceFile.setSuffix(defaultExtension());
-            sourceFile.setAutoRemove(false);
-            if (sourceFile.open()) {
-    //             QDataStream stream (&sourceFile);
-    //             KHTMLPageCache::self()->saveData(d->m_cacheId, &stream);
-                currentUrl = KUrl();
-                currentUrl.setPath(sourceFile.fileName());
-                isTempFile = true;
-            }
-        }
-    #endif
-
-        KRun::runUrl(currentUrl, QL1S("text/plain"), d->view, isTempFile);
+        //TODO: we can do better than retreiving the document again!
+        KRun::runUrl(d->view->page()->mainFrame()->url(), QL1S("text/plain"), d->view, false);
     }
 }
 
 void WebKitBrowserExtension::slotViewFrameSource()
 {
     if (d->view) {
+        //TODO: we can do better than retreiving the document again!
         KRun::runUrl(KUrl(d->view->page()->currentFrame()->url()), QL1S("text/plain"), d->view, false);
     }
 }
