@@ -94,6 +94,7 @@ public:
     bool m_accessKeysEnabled : 1;
     bool m_zoomTextOnly : 1;
     bool m_useCookieJar : 1;
+    bool m_bAutoRefreshPage: 1;
 
     // the virtual global "domain"
     KPerDomainSettings global;
@@ -419,6 +420,9 @@ void WebKitSettings::init( KConfig * config, bool reset )
     if ( reset || cgHtml.hasKey( "AutoLoadImages" ) )
       d->m_bAutoLoadImages = cgHtml.readEntry( "AutoLoadImages", true );
 
+    if ( reset || cgHtml.hasKey( "AutoDelayedActions" ) )
+        d->m_bAutoRefreshPage = cgHtml.readEntry( "AutoDelayedActions", true );
+
     if ( reset || cgHtml.hasKey( "UnfinishedImageFrame" ) )
       d->m_bUnfinishedImageFrame = cgHtml.readEntry( "UnfinishedImageFrame", true );
 
@@ -657,6 +661,9 @@ void WebKitSettings::init( KConfig * config, bool reset )
   }
 
   // Sync with QWebSettings.
+  if (!d->m_encoding.isEmpty())
+      QWebSettings::globalSettings()->setDefaultTextEncoding(d->m_encoding);
+
   if (!userStyleSheet().isEmpty()) {
       QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl(userStyleSheet()));
   }
@@ -798,7 +805,7 @@ void WebKitSettings::addAdFilter( const QString &url )
     KConfigGroup config = KSharedConfig::openConfig( "khtmlrc", KConfig::NoGlobals )->group( "Filter Settings" );
 
     QRegExp rx;
-    
+
     // Try compiling to avoid invalid stuff. Only support the basic syntax here...
     // ### refactor somewhat
     if (url.length()>2 && url[0]=='/' && url[url.length()-1] == '/')
@@ -1049,6 +1056,11 @@ const QColor& WebKitSettings::linkColor() const
 const QColor& WebKitSettings::vLinkColor() const
 {
   return d->m_vLinkColor;
+}
+
+bool WebKitSettings::autoPageRefresh() const
+{
+  return d->m_bAutoRefreshPage;
 }
 
 bool WebKitSettings::autoLoadImages() const

@@ -20,7 +20,6 @@
  *
  */
 
-
 #include "kwebkitpart_p.h"
 #include "kwebkitpart_ext.h"
 #include "kwebkitpart.h"
@@ -34,6 +33,7 @@
 
 #include <kwebwallet.h>
 #include <kdeversion.h>
+#include <kcodecaction.h>
 #include <KDE/KLocalizedString>
 #include <KDE/KStringHandler>
 #include <KDE/KMessageBox>
@@ -46,14 +46,18 @@
 #include <KDE/KStatusBar>
 #include <KDE/KToolInvocation>
 #include <KDE/KMenu>
+#include <KDE/KStandardDirs>
+#include <KDE/KConfig>
 #include <KDE/KAcceleratorManager>
 #include <KParts/StatusBarExtension>
 
 #include <QtCore/QFile>
+#include <QtCore/QTextCodec>
 #include <QtGui/QVBoxLayout>
 #include <QtDBus/QDBusInterface>
 #include <QtWebKit/QWebFrame>
 #include <QtWebKit/QWebElement>
+#include <QtWebKit/QWebHistoryItem>
 
 #define QL1S(x) QLatin1String(x)
 #define QL1C(x) QLatin1Char(x)
@@ -61,7 +65,8 @@
 
 KWebKitPartPrivate::KWebKitPartPrivate(KWebKitPart *parent)
                    :QObject(),
-                    updateHistory(true),
+                    emitOpenUrlNotify(true),
+                    contentModified(false),
                     q(parent),
                     statusBarWalletLabel(0),
                     hasCachedFormData(false)
@@ -99,6 +104,9 @@ void KWebKitPartPrivate::init(QWidget *mainWidget)
             this, SLOT(slotLinkHovered(const QString &, const QString &, const QString &)));
     connect(webPage, SIGNAL(saveFrameStateRequested(QWebFrame *, QWebHistoryItem *)),
             this, SLOT(slotSaveFrameState(QWebFrame *, QWebHistoryItem *)));
+    connect(webPage, SIGNAL(restoreFrameStateRequested(QWebFrame *)),
+            this, SLOT(slotRestoreFrameState(QWebFrame *)));
+    connect(webPage, SIGNAL(contentsChanged()), this, SLOT(slotContentsChanged()));
     connect(webPage, SIGNAL(jsStatusBarMessage(const QString &)),
             q, SIGNAL(setStatusBarText(const QString &)));
     connect(webView, SIGNAL(linkShiftClicked(const KUrl &)),
@@ -120,7 +128,7 @@ void KWebKitPartPrivate::init(QWidget *mainWidget)
     statusBarExtension = new KParts::StatusBarExtension(q);
 
     // Create and setup the password bar...
-    KDEPrivate::PasswordBar *passwordBar = new KDEPrivate::PasswordBar(mainWidget);    
+    KDEPrivate::PasswordBar *passwordBar = new KDEPrivate::PasswordBar(mainWidget);
     KWebWallet *webWallet = webPage->wallet();
 
     if (webWallet) {
@@ -184,6 +192,10 @@ void KWebKitPartPrivate::initActions()
     action->setShortcutContext(Qt::WidgetShortcut);
     webView->addAction(action);
 
+    KCodecAction *codecAction = new KCodecAction( KIcon("character-set"), i18n( "Set &Encoding" ), this, true );
+    q->actionCollection()->addAction( "setEncoding", codecAction );
+    connect(codecAction, SIGNAL(triggered(QTextCodec*)), SLOT(slotSetTextEncoding(QTextCodec*)));
+
     action = new KAction(i18n("View Do&cument Source"), this);
     q->actionCollection()->addAction("viewDocumentSource", action);
     action->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_U));
@@ -205,18 +217,25 @@ void KWebKitPartPrivate::initActions()
 
 void KWebKitPartPrivate::slotLoadStarted()
 {
+    kDebug();
     emit q->started(0);
     slotWalletClosed();
+    contentModified = false;
+}
+
+void KWebKitPartPrivate::slotContentsChanged()
+{
+    contentModified = true;
 }
 
 void KWebKitPartPrivate::slotLoadFinished(bool ok)
 {
-    updateHistory = true;
+    emitOpenUrlNotify = true;
 
-    if (ok) {      
+    if (ok) {
         QString linkStyle;
-
         QColor linkColor = WebKitSettings::self()->vLinkColor();
+
         if (linkColor.isValid())
             linkStyle += QString::fromLatin1("a:visited {color: rgb(%1,%2,%3);}\n")
                          .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
@@ -226,18 +245,13 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
             linkStyle += QString::fromLatin1("a:active {color: rgb(%1,%2,%3);}\n")
                          .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
 
-        if (WebKitSettings::self()->underlineLink()) {
+        if (WebKitSettings::self()->underlineLink())
             linkStyle += QL1S("a:link {text-decoration:underline;}\n");
-        } else if (WebKitSettings::self()->hoverLink()) {
+        else if (WebKitSettings::self()->hoverLink())
             linkStyle += QL1S("a:hover {text-decoration:underline;}\n");
-        }
 
-        if (!linkStyle.isEmpty()) {
+        if (!linkStyle.isEmpty())
             webPage->mainFrame()->documentElement().setAttribute(QL1S("style"), linkStyle);
-        }
-
-        // Restore page state...
-        webPage->restoreFrameStates();
 
         if (webView->title().trimmed().isEmpty()) {
             // If the document title is empty, then set it to the current url
@@ -270,18 +284,30 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
                 hasCachedFormData = true;
             }
         }
+
+        // Set the favicon specified through the <link> tag...
+        const QWebElement element = webPage->mainFrame()->findFirstElement(QL1S("head>link[rel=icon]"));
+        const QString href = element.attribute("href");
+        if (!element.isNull()) {
+            kDebug() << "Setting favicon to" << href;
+            browserExtension->setIconUrl(KUrl(href));
+        }
     }
 
     /*
       NOTE: Support for stopping meta data redirects is implemented in QtWebKit
       2.0 (Qt 4.7) or greater. See https://bugs.webkit.org/show_bug.cgi?id=29899.
     */
+    bool pending = false;
 #if QT_VERSION >= 0x040700
-    if (webPage->mainFrame()->findAllElements(QL1S("head>meta[http-equiv=refresh]")).count())
-        emit q->completed(true);
-    else
+    if (webPage->mainFrame()->findAllElements(QL1S("head>meta[http-equiv=refresh]")).count()) {
+        if (WebKitSettings::self()->autoPageRefresh())
+            pending = true;
+        else
+            webPage->triggerAction(QWebPage::StopScheduledPageRefresh);
+    }
 #endif
-        emit q->completed();
+    emit q->completed((ok && pending));
 }
 
 void KWebKitPartPrivate::slotLoadAborted(const KUrl & url)
@@ -325,9 +351,21 @@ void KWebKitPartPrivate::slotShowSecurity()
 void KWebKitPartPrivate::slotSaveFrameState(QWebFrame *frame, QWebHistoryItem *item)
 {
     Q_UNUSED (item);
-    if (!frame->parentFrame() && updateHistory) {
-        emit browserExtension->openUrlNotify();
+    if (!frame->parentFrame()) {
+        kDebug() << "Update history ?" << emitOpenUrlNotify;
+        if (emitOpenUrlNotify)
+            emit browserExtension->openUrlNotify();
+
+        // Save the SSL info as the history item meta-data...
+        if (item && webPage->sslInfo().isValid())
+            item->setUserData(webPage->sslInfo().toMetaData());
     }
+}
+
+void KWebKitPartPrivate::slotRestoreFrameState(QWebFrame *frame)
+{
+    if (!frame->parentFrame())
+        emitOpenUrlNotify = true;
 }
 
 void KWebKitPartPrivate::slotLinkHovered(const QString &link, const QString &title, const QString &content)
@@ -413,7 +451,7 @@ void KWebKitPartPrivate::slotLinkHovered(const QString &link, const QString &tit
 }
 
 void KWebKitPartPrivate::slotSearchForText(const QString &text, bool backward)
-{   
+{
     QWebPage::FindFlags flags = QWebPage::FindWrapsAroundDocument;
 
     if (backward)
@@ -479,10 +517,9 @@ void KWebKitPartPrivate::slotShowWalletMenu()
 
 void KWebKitPartPrivate::slotLaunchWalletManager()
 {
-    QDBusInterface r("org.kde.kwalletmanager", "/kwalletmanager/MainWindow_1", "org.kde.KMainWindow");
+    QDBusInterface r("org.kde.kwalletmanager", "/kwalletmanager/MainWindow_1");
     if (r.isValid()) {
         r.call(QDBus::NoBlock, "show");
-        r.call(QDBus::NoBlock, "raise");
     } else {
         KToolInvocation::startServiceByDesktopName("kwalletmanager_show");
     }
@@ -499,6 +536,19 @@ void KWebKitPartPrivate::slotRemoveCachedPasswords()
     if (webPage && webPage->wallet()) {
         webPage->wallet()->removeFormData(webPage->mainFrame(), true);
         hasCachedFormData = false;
+    }
+}
+
+void KWebKitPartPrivate::slotSetTextEncoding(QTextCodec * codec)
+{
+    if (webPage) {
+        QWebSettings *localSettings = webPage->settings();
+        if (localSettings) {
+            kDebug() << codec->name();
+            localSettings->setDefaultTextEncoding(codec->name());
+            q->openUrl(q->url());
+            //webPage->triggerAction(QWebPage::Reload);
+        }
     }
 }
 
