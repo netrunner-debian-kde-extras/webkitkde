@@ -315,6 +315,7 @@ QWebPage *WebPage::createWindow(WebWindowType type)
 void WebPage::slotUnsupportedContent(QNetworkReply *reply)
 {
     Q_ASSERT (reply);
+
     const KIO::MetaData metaData = reply->attribute(static_cast<QNetworkRequest::Attribute>(KIO::AccessManager::MetaData)).toMap();
     bool hasContentDisposition;
     if (metaData.isEmpty())
