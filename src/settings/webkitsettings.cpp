@@ -465,7 +465,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
     d->m_fallbackAccessKeysAssignments.clear();
     for( QStringList::ConstIterator it = accesskeys.begin(); it != accesskeys.end(); ++it )
         if( (*it).length() > 2 && (*it)[ 1 ] == ':' )
-            d->m_fallbackAccessKeysAssignments.append( qMakePair( (*it).mid( 2 ), (*it)[ 0 ] ));    
+            d->m_fallbackAccessKeysAssignments.append( qMakePair( (*it).mid( 2 ), (*it)[ 0 ] ));
   }
 
   // Colors

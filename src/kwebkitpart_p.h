@@ -89,7 +89,7 @@ private Q_SLOTS:
 private:
     KWebKitPart *q;
     KUrlLabel *statusBarWalletLabel;
-    bool hasCachedFormData;    
+    bool hasCachedFormData;
 };
 
 #endif // KWEBKITPART_P_H
