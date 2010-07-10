@@ -19,6 +19,7 @@ Package: libkwebkit0.9.5
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: libkwebkit1
 Description: KDE bindings for WebKit
  KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
