@@ -41,6 +41,7 @@
 #include <KDE/KDebug>
 #include <KDE/KPrintPreview>
 #include <KDE/KStandardDirs>
+#include <KDE/KTemporaryFile>
 #include <kdeversion.h>
 
 #include <QtCore/QPointer>
@@ -392,17 +393,41 @@ void WebKitBrowserExtension::slotSaveLinkAs()
 void WebKitBrowserExtension::slotViewDocumentSource()
 {
     if (d->view) {
-        //TODO: we can do better than retreiving the document again!
+#if 1
+        //FIXME: This workaround is necessary because freakin' QtWebKit does not provide
+        //a means to obtain the original content of the frame. Actually it does, but the
+        //returned content is royally screwed up! *sigh*
         KRun::runUrl(d->view->page()->mainFrame()->url(), QL1S("text/plain"), d->view, false);
+#else
+        KTemporaryFile tempFile;
+        tempFile.setSuffix(QL1S(".html"));
+        tempFile.setAutoRemove(false);
+        if (tempFile.open()) {
+            tempFile.write(d->view->page()->mainFrame()->toHtml().toUtf8());
+            KRun::runUrl(tempFile.fileName(), QL1S("text/plain"), d->view, true, false);
+        }
+#endif
     }
 }
 
 void WebKitBrowserExtension::slotViewFrameSource()
 {
-    if (d->view) {
-        //TODO: we can do better than retreiving the document again!
-        KRun::runUrl(KUrl(d->view->page()->currentFrame()->url()), QL1S("text/plain"), d->view, false);
-    }
+  if (d->view) {
+#if 1
+      //FIXME: This workaround is necessary because freakin' QtWebKit does not provide
+      //a means to obtain the original content of the frame. Actually it does, but the
+      //returned content is royally screwed up! *sigh*
+      KRun::runUrl(d->view->page()->mainFrame()->url(), QL1S("text/plain"), d->view, false);
+#else
+      KTemporaryFile tempFile;
+      tempFile.setSuffix(QL1S(".html"));
+      tempFile.setAutoRemove(false);
+      if (tempFile.open()) {
+          tempFile.write(d->view->page()->currentFrame()->toHtml().toUtf8());
+          KRun::runUrl(tempFile.fileName(), QL1S("text/plain"), d->view, true, false);
+      }
+#endif
+  }
 }
 
 #include "kwebkitpart_ext.moc"
