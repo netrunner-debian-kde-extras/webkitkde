@@ -1,3 +1,10 @@
+webkitkde (0.9svn1148394-1) unstable; urgency=low
+
+  * New upstream version.
+  * restore libkwebkit1 package name (following upstream)
+
+ -- Adrian von Bidder <cmot@debian.org>  Sat, 10 Jul 2010 16:03:24 +0200
+
 webkitkde (0.9svn1143138-1) unstable; urgency=low
 
   * New upstream version.
