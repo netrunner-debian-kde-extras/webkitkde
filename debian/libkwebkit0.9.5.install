@@ -1,1 +1,2 @@
-usr/lib/lib*.so.*
+usr/lib/libkwebkit.so.0.9.5
+usr/lib/libkwebkit.so.1
