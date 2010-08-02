@@ -232,29 +232,6 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
     emitOpenUrlNotify = true;
 
     if (ok) {
-        // FIXME: Link highlighting, underlining and marking as visited do not
-        // seem to work consistently using the hack below. Find a better way to
-        // resolve this issue...
-        QString linkStyle;
-        QColor linkColor = WebKitSettings::self()->vLinkColor();
-
-        if (linkColor.isValid())
-            linkStyle += QString::fromLatin1("a:visited {color: rgb(%1,%2,%3);}\n")
-                         .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
-
-        linkColor = WebKitSettings::self()->linkColor();
-        if (linkColor.isValid())
-            linkStyle += QString::fromLatin1("a:active {color: rgb(%1,%2,%3);}\n")
-                         .arg(linkColor.red()).arg(linkColor.green()).arg(linkColor.blue());
-
-        if (WebKitSettings::self()->underlineLink())
-            linkStyle += QL1S("a:link {text-decoration:underline;}\n");
-        else if (WebKitSettings::self()->hoverLink())
-            linkStyle += QL1S("a:hover {text-decoration:underline;}\n");
-
-        if (!linkStyle.isEmpty())
-            webPage->mainFrame()->documentElement().setAttribute(QL1S("style"), linkStyle);
-
         if (webView->title().trimmed().isEmpty()) {
             // If the document title is empty, then set it to the current url
             const QString caption = webView->url().toString((QUrl::RemoveQuery|QUrl::RemoveFragment));
@@ -289,13 +266,23 @@ void KWebKitPartPrivate::slotLoadFinished(bool ok)
 
         // Set the favicon specified through the <link> tag...
         if (WebKitSettings::self()->favIconsEnabled()) {
-            const QWebElement element = webPage->mainFrame()->findFirstElement(QL1S("head>link[rel=icon]"));
-            const QString href = element.attribute("href");
-            if (!element.isNull()) {
-                const KUrl iconUrl (webPage->mainFrame()->baseUrl(), href);
-                kDebug() << "setting favicon to" << iconUrl;
-                browserExtension->setIconUrl(iconUrl);
+            const QWebElement element = webPage->mainFrame()->findFirstElement(QL1S("head>link[rel=icon], "
+                                                                                    "head>link[rel=\"shortcut icon\"]"));
+            KUrl shortcutIconUrl;
+            if (element.isNull()) {
+                shortcutIconUrl = webPage->mainFrame()->baseUrl();
+                QString urlPath = shortcutIconUrl.path();
+                const int index = urlPath.indexOf(QL1C('/'));
+                if (index > -1)
+                  urlPath.truncate(index);
+                urlPath += QL1S("/favicon.ico");
+                shortcutIconUrl.setPath(urlPath);
+            } else {
+                shortcutIconUrl = KUrl (webPage->mainFrame()->baseUrl(), element.attribute("href"));
             }
+
+            kDebug() << "setting favicon to" << shortcutIconUrl;
+            browserExtension->setIconUrl(shortcutIconUrl);
         }
     }
 
@@ -357,7 +344,7 @@ void KWebKitPartPrivate::slotShowSecurity()
 void KWebKitPartPrivate::slotSaveFrameState(QWebFrame *frame, QWebHistoryItem *item)
 {
     Q_UNUSED (item);
-    if (!frame->parentFrame()) {
+    if (frame == webPage->mainFrame()) {
         kDebug() << "Update history ?" << emitOpenUrlNotify;
         if (emitOpenUrlNotify)
             emit browserExtension->openUrlNotify();
@@ -370,7 +357,7 @@ void KWebKitPartPrivate::slotSaveFrameState(QWebFrame *frame, QWebHistoryItem *i
 
 void KWebKitPartPrivate::slotRestoreFrameState(QWebFrame *frame)
 {
-    if (!frame->parentFrame())
+    if (frame == webPage->mainFrame())
         emitOpenUrlNotify = true;
 }
 
