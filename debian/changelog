@@ -2,8 +2,11 @@ webkitkde (0.9.6svn1158036-1) unstable; urgency=low
 
   * New upstream version.
     - Favicon and link color changes
+  * Rename back to libkwebkit1
+    - Provide the 0.9.5 name to not break kdenetwork (kget); ABI didn't change
+    - this hack will be removed after the next kdenetwork upload.
 
- -- Adrian von Bidder <cmot@debian.org>  Mon, 02 Aug 2010 13:03:00 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Wed, 04 Aug 2010 19:17:40 +0200
 
 webkitkde (0.9svn1148394-2) unstable; urgency=low
 

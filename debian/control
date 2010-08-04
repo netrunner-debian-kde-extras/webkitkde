@@ -10,18 +10,18 @@ Vcs-Hg: https://fortytwo.ch/hg/pkg-webkitkde
 
 Package: kpart-webkit
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libkwebkit0.9.6 (= ${binary:Version})
+Depends: ${shlibs:Depends}, ${misc:Depends}, libkwebkit1 (= ${binary:Version})
 Description: WebKit KPart
  A Plug-In for the Konqueror web browser and other KDE applications allowing
  the WebKit HTML renderer to be used instead of the traditional KHTML.
 
-Package: libkwebkit0.9.6
+Package: libkwebkit1
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Provides: libkwebkit1
-Conflicts: libkwebkit1
-Replaces: libkwebkit1
+Provides: libkwebkit0.9.5
+Conflicts: libkwebkit0.9.5
+Replaces: libkwebkit0.9.5
 Description: KDE bindings for WebKit
  KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
@@ -29,7 +29,7 @@ Description: KDE bindings for WebKit
 Package: libkwebkit-dev
 Architecture: any
 Section: libdevel
-Depends: ${misc:Depends}, libkwebkit0.9.6 (= ${binary:Version}), kdelibs5-dev
+Depends: ${misc:Depends}, libkwebkit1 (= ${binary:Version}), kdelibs5-dev
 Conflicts: libwebkitkde-dev
 Replaces: libwebkitkde-dev
 Description: KDE bindings for WebKit, Development files
@@ -42,7 +42,7 @@ Package: libkwebkit-dbg
 Architecture: any
 Priority: extra
 Section: debug
-Depends: ${misc:Depends}, libkwebkit0.9.6 (= ${binary:Version}), kdelibs5-dbg, libqt4-webkit-dbg
+Depends: ${misc:Depends}, libkwebkit1 (= ${binary:Version}), kdelibs5-dbg, libqt4-webkit-dbg
 Conflicts: libwebkitkde-dbg
 Replaces: libwebkitkde-dbg
 Description: KDE bindings for WebKit, Development files
