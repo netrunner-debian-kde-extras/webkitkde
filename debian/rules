@@ -2,7 +2,7 @@
 
 include /usr/share/pkg-kde-tools/makefiles/1/variables.mk
 #export DH_VERBOSE=1
-export DPKG_GENSYMBOLS_CHECK_LEVEL=4
+export DPKG_GENSYMBOLS_CHECK_LEVEL=0
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
     NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
