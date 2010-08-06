@@ -1,3 +1,9 @@
+webkitkde (0.9.6svn1158036-3) UNRELEASED; urgency=low
+
+  * Convert symbol file to C++
+
+ -- Adrian von Bidder <cmot@debian.org>  Fri, 06 Aug 2010 16:06:01 +0200
+
 webkitkde (0.9.6svn1158036-2) unstable; urgency=low
 
   * For now: only warn about ABI problems, don't fail the build.
