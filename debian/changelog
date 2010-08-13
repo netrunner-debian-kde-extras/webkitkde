@@ -1,8 +1,9 @@
-webkitkde (0.9.6svn1158036-3) UNRELEASED; urgency=low
+webkitkde (0.9.6svn1162893-1) UNRELEASED; urgency=low
 
+  * New upstream version.
   * Convert symbol file to C++
 
- -- Adrian von Bidder <cmot@debian.org>  Fri, 06 Aug 2010 16:06:01 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Fri, 13 Aug 2010 13:31:21 +0200
 
 webkitkde (0.9.6svn1158036-2) unstable; urgency=low
 
