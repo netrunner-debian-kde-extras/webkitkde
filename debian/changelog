@@ -1,3 +1,10 @@
+webkitkde (0.9.6svn1158036-2.1) unstable; urgency=low
+
+  * Non-maintainer upload, acked by maintainer.
+  * Revert the changes to upstream regarding priorities of plugins.
+
+ -- Sune Vuorela <sune@debian.org>  Wed, 01 Sep 2010 23:42:47 +0200
+
 webkitkde (0.9.6svn1158036-2) unstable; urgency=low
 
   * For now: only warn about ABI problems, don't fail the build.
