@@ -121,3 +121,4 @@ libkwebkit.so.1 libkwebkit1 #MINVER#
  (c++)"virtual thunk to KWebKitPart::~KWebKitPart()@Base" 0.9.6svn1158036
  (c++)"virtual thunk to KWebKitPart::~KWebKitPart()@Base" 0.9.6svn1158036
  (c++|regex)"operator new\(unsigned (int|long), void\*\)@Base" 0.9.6svn1158036
+ (c++|arch=kfreebsd-amd64 kfreebsd-i386)"operator delete(void*, void*)@Base" 0.9.6svn1158036-1
