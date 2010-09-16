@@ -1,5 +1,5 @@
-WebKit KPart is now the default
--------------------------------
+WebKit KPart in Debian
+----------------------
 
 By default, the khtml rendering engine will take precedence over the webkit
 part (this is a choice by the KDE project.)
