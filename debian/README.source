@@ -1,3 +1,6 @@
+Building webkitkde
+------------------
+
 The source of this package is managed by using a hgpkg managed
 mercurial repository at https://fortytwo.ch/hg/pkg-webkitkde.  (hgpkg is
 currently included in the debian/ directoriy here and not separately packaged,
@@ -34,3 +37,8 @@ Import a new upstream version:
 (arguably a mercurial bug: you'll get a merge conflict in .hgtags during
 upstream import which you'll have to correct manually.)
 
+
+Hints
+-----
+
+Symbol Files: http://pkg-kde.alioth.debian.org/symbolfiles.html
