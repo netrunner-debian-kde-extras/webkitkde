@@ -1,3 +1,10 @@
+webkitkde (0.9.6svn1180498-2) UNRELEASED; urgency=low
+
+  * Drop the libkwebkit0.9.5 name, new versions will change ABI anyway.
+  * Drop mention of very old (used in sid only) package names
+
+ -- Adrian von Bidder <cmot@debian.org>  Tue, 28 Sep 2010 21:09:11 +0200
+
 webkitkde (0.9.6svn1180498-1) unstable; urgency=low
 
   * New upstream version.

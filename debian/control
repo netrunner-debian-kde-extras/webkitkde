@@ -19,9 +19,6 @@ Package: libkwebkit1
 Architecture: any
 Section: libs
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Provides: libkwebkit0.9.5
-Conflicts: libkwebkit0.9.5
-Replaces: libkwebkit0.9.5
 Description: KDE bindings for WebKit
  KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
@@ -30,8 +27,6 @@ Package: libkwebkit-dev
 Architecture: any
 Section: libdevel
 Depends: ${misc:Depends}, libkwebkit1 (= ${binary:Version}), kdelibs5-dev
-Conflicts: libwebkitkde-dev
-Replaces: libwebkitkde-dev
 Description: KDE bindings for WebKit, Development files
  KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
@@ -43,8 +38,6 @@ Architecture: any
 Priority: extra
 Section: debug
 Depends: ${misc:Depends}, libkwebkit1 (= ${binary:Version}), kdelibs5-dbg, libqt4-webkit-dbg
-Conflicts: libwebkitkde-dbg
-Replaces: libwebkitkde-dbg
 Description: KDE bindings for WebKit, Development files
  KDEWebKit provides the necessary glue code to use the WebKit HTML rendering
  engine in KDE applications.
