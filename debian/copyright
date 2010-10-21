@@ -2,7 +2,7 @@ This package was debianized by
     Adrian von Bidder <cmot@debian.org>
 
 The package is based on a Subversion snapshot from
-    svn://anonsvn.kde.org/home/kde/trunk/extragear/base/kwebkitpart
+    svn://anonsvn.kde.org/home/kde/branches/stable/extragear-kde4/base/kwebkitpart
 
 Copyright and Upstream Authors:
 
