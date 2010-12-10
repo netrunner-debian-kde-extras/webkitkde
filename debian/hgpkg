@@ -63,7 +63,7 @@ function cmd_import() {
 
     # need to convert srcpath to an absolute path
     if [ ! -d "$srcpath" ]; then
-        echo "Errror: $srcpath doesn't exist."
+        echo "Error: $srcpath doesn't exist."
         rm -rf "$WORKDIR"
         exit 1
     fi
