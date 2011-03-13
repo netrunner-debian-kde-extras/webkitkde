@@ -4,8 +4,9 @@ webkitkde (0.9.6svn1187649-1) experimental; urgency=low
     - Switch to the stable branch in subversion; trunk requires KDE 4.6
   * Drop the libkwebkit0.9.5 name, new versions will change ABI anyway.
   * Drop mention of very old (used in sid only) package names
+  * Build-Dependencies: QtWebkit is not in qt anymore. (Closes: #618133)
 
- -- Adrian von Bidder <cmot@debian.org>  Thu, 21 Oct 2010 10:06:30 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Sun, 13 Mar 2011 19:59:59 +0100
 
 webkitkde (0.9.6svn1180498-1) unstable; urgency=low
 
