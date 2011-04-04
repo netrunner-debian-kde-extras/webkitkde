@@ -24,16 +24,25 @@
 #ifndef KWEBKITPART_H
 #define KWEBKITPART_H
 
-#include "kwebkit_export.h"
-
 #include <KDE/KParts/ReadOnlyPart>
 
 namespace KParts {
   class BrowserExtension;
+  class StatusBarExtension;
+}
+
+namespace KDEPrivate {
+  class PasswordBar;
+  class SearchBar;
 }
 
 class QWebView;
-class KWebKitPartPrivate;
+class QWebFrame;
+class QWebHistoryItem;
+class WebView;
+class WebPage;
+class KUrlLabel;
+class WebKitBrowserExtension;
 
 /**
  * A KPart wrapper for the QtWebKit's browser rendering engine.
@@ -45,7 +54,7 @@ class KWebKitPartPrivate;
  * engine are provided through existing QtWebKit class ; @see QWebView.
  *
  */
-class KWEBKIT_EXPORT KWebKitPart : public KParts::ReadOnlyPart
+class KWebKitPart : public KParts::ReadOnlyPart
 {
     Q_OBJECT
     Q_PROPERTY( bool modified READ isModified )
@@ -82,6 +91,12 @@ public:
      */
     bool isModified() const;
 
+    /**
+     * Connects the appropriate signals from the given page to the slots
+     * in this class.
+     */
+    void connectWebPageSignals(WebPage* page);
+
 protected:
     /**
      * Re-implemented for internal reasons. API remains unaffected.
@@ -97,9 +112,44 @@ protected:
      */
     virtual bool openFile();
 
+private Q_SLOTS:
+    void slotShowSecurity();
+    void slotShowSearchBar();
+    void slotLoadStarted();
+    void slotLoadFinished(bool);
+    void slotLoadAborted(const KUrl &);
+
+    void slotSearchForText(const QString &text, bool backward);
+    void slotLinkHovered(const QString &, const QString&, const QString &);
+    void slotSaveFrameState(QWebFrame *frame, QWebHistoryItem *item);
+    void slotRestoreFrameState(QWebFrame *frame);
+    void slotLinkMiddleOrCtrlClicked(const KUrl&);
+    void slotSelectionClipboardUrlPasted(const KUrl&, const QString&);
+
+    void slotUrlChanged(const QUrl &);
+    void slotWalletClosed();
+    void slotShowWalletMenu();
+    void slotLaunchWalletManager();
+    void slotDeleteNonPasswordStorableSite();
+    void slotRemoveCachedPasswords();
+    void slotSetTextEncoding(QTextCodec*);
+    void slotSetStatusBarText(const QString& text);
+    void slotWindowCloseRequested();
+    void slotPrintRequested(QWebFrame*);
+
 private:
-    friend class KWebKitPartPrivate;
-    KWebKitPartPrivate * const d;
+    WebPage* page();
+    void initActions();
+
+    bool m_emitOpenUrlNotify;
+    bool m_pageRestored;
+    bool m_hasCachedFormData;
+    KUrlLabel* m_statusBarWalletLabel;
+    KDEPrivate::SearchBar* m_searchBar;
+    KDEPrivate::PasswordBar* m_passwordBar;
+    WebKitBrowserExtension* m_browserExtension;
+    KParts::StatusBarExtension* m_statusBarExtension;
+    WebView* m_webView;
 };
 
 #endif // WEBKITPART_H

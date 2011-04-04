@@ -9,17 +9,21 @@ be in production quality yet.
 
 There are known limitations / issues; please see the following two
 documents before reporting issues:
-* http://websvn.kde.org/*checkout*/trunk/KDE/kdelibs/kdewebkit/ISSUES
-* http://websvn.kde.org/*checkout*/trunk/extragear/base/kwebkitpart/TODO
+
+* https://projects.kde.org/projects/kde/kdelibs/repository/revisions/master/entry/kdewebkit/ISSUES
+* https://projects.kde.org/projects/extragear/base/kwebkitpart/repository/revisions/master/entry/TODO
 
 Please report any issues to: https://bugs.kde.org
 IMPORTANT NOTE: Do not select "konqueror" as product, but "kwebkitpart"!
 
 There is also a public mailing list available for support:
-  webkit-devel @ kde.org
 
-KDE 4.4 or greater is required for building and running KWebKitPart.
+    webkit-devel @ kde.org
 
+Versions:
+---------
+** KDE 4.4 or higher is required for building and running KWebKitPart.
+** For KDE 4.5.x or older you MUST use the 0.9 branch of kwebkitpart.
 
 How to use KWebKitPart in Konqueror
 ===================================
@@ -35,5 +39,9 @@ If you want to set KWebKitPart as default for any website, run:
 'keditfiletype text/html'
 and move "WebKit (kwebkitpart)" in the "Embedding" tab to the top.
 
+In KDE 4.6 and higher you can choose the default rendering engine
+in Konqueror's configuration dialog under the "General" section.
+
 For more information about this project please see also:
 http://techbase.kde.org/Projects/WebKit
+

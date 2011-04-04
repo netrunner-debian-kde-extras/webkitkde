@@ -47,13 +47,14 @@ KWebKitFactory::~KWebKitFactory()
     kDebug() << this;
 }
 
-KParts::Part *KWebKitFactory::createPartObject(QWidget *parentWidget, QObject *parent, const char *className, const QStringList &args)
+QObject *KWebKitFactory::create(const char* iface, QWidget *parentWidget, QObject *parent, const QVariantList &args, const QString& keyword)
 {
-    Q_UNUSED(className);
+    Q_UNUSED(iface);
+    Q_UNUSED(keyword);
     Q_UNUSED(args);
 
-    // NOTE: The code below is what makes proper integration of QtWebKit's history
-    // management with that of any KParts based application possible!!!
+    // NOTE: The code below is what makes it possible to properly integrate QtWebKit's
+    // history management with any KParts based application.
     QString tempFileName;
     KTemporaryFile tempFile;
     tempFile.setFileTemplate(KStandardDirs::locateLocal("data", QLatin1String("kwebkitpart/autosave/XXXXXX")));
@@ -90,9 +91,6 @@ void KWebKitFactory::slotDestroyed(QObject * obj)
     }
 }
 
-extern "C" KDE_EXPORT void *init_kwebkitpart()
-{
-    return new KWebKitFactory;
-}
+K_EXPORT_PLUGIN(KWebKitFactory)
 
 #include "kwebkitpartfactory.moc"

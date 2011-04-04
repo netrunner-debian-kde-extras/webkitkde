@@ -22,17 +22,20 @@
 
 #include "khtml_filter_p.h"
 
-#include <kconfig.h>
-#include <kconfiggroup.h>
-#include <kdebug.h>
-#include <kglobal.h>
-#include <kglobalsettings.h>
-#include <klocale.h>
-#include <kmessagebox.h>
-#include <kstandarddirs.h>
+#include <KDE/KConfig>
+#include <KDE/KConfigGroup>
+#include <KDE/KJob>
+#include <KDE/KIO/Job>
+#include <KDE/KDebug>
+#include <KDE/KGlobal>
+#include <KDE/KGlobalSettings>
+#include <KDE/KLocale>
+#include <KDE/KMessageBox>
+#include <KDE/KStandardDirs>
 
-#include <QWebSettings>
+#include <QtWebKit/QWebSettings>
 #include <QtGui/QFontDatabase>
+#include <QtCore/QFileInfo>
 
 /**
  * @internal
@@ -67,10 +70,10 @@ struct KPerDomainSettings {
 QString *WebKitSettings::avFamilies = 0;
 typedef QMap<QString,KPerDomainSettings> PolicyMap;
 
-class WebKitSettingsPrivate
+class WebKitSettingsData
 {
-public:
-    WebKitSettingsPrivate() : nonPasswordStorableSites (0) {}
+public:  
+    WebKitSettingsData() : nonPasswordStorableSites (0) {}
 
     bool m_bChangeCursor : 1;
     bool m_bOpenMiddleClick : 1;
@@ -122,19 +125,71 @@ public:
     khtml::FilterSet adWhiteList;
     QList< QPair< QString, QChar > > m_fallbackAccessKeysAssignments;
 
-    KConfig *nonPasswordStorableSites;
+    KConfig *nonPasswordStorableSites;  
+};
+
+class WebKitSettingsPrivate : public QObject, public WebKitSettingsData
+{
+    Q_OBJECT
+public:
+    void adblockFilterLoadList(const QString& filename)
+    {
+        /** load list file and process each line */
+        QFile file(filename);
+        if (file.open(QIODevice::ReadOnly)) {
+            QTextStream ts(&file);
+            QString line = ts.readLine();
+            while (!line.isEmpty()) {
+                //kDebug() << "Adding filter:" << line;
+                /** white list lines start with "@@" */
+                if (line.startsWith(QLatin1String("@@")))
+                    adWhiteList.addFilter(line);
+                else
+                    adBlackList.addFilter(line);
+                line = ts.readLine();
+            }
+            file.close();
+        }
+    }
+
+public Q_SLOTS:
+    void adblockFilterResult(KJob *job)
+    {
+        KIO::StoredTransferJob *tJob = qobject_cast<KIO::StoredTransferJob*>(job);
+        Q_ASSERT(tJob);
+
+        if ( job->error() == KJob::NoError )
+        {
+            const QByteArray byteArray = tJob->data();
+            const QString localFileName = tJob->property( "webkitsettings_adBlock_filename" ).toString();
+
+            QFile file(localFileName);
+            if ( file.open(QFile::WriteOnly) )
+            {
+                const bool success = (file.write(byteArray) == byteArray.size());
+                if ( success )
+                    adblockFilterLoadList(localFileName);
+                else
+                    kWarning() << "Could not write" << byteArray.size() << "to file" << localFileName;
+                file.close();
+            }
+            else
+                kDebug() << "Cannot open file" << localFileName << "for filter list";
+        }
+        else
+            kDebug() << "Downloading" << tJob->url() << "failed with message:" << job->errorText();
+    }
 };
 
 
 /** Returns a writeable per-domains settings instance for the given domain
   * or a deep copy of the global settings if not existent.
   */
-static KPerDomainSettings &setup_per_domain_policy(
-				WebKitSettingsPrivate* const d,
-				const QString &domain) {
-  if (domain.isEmpty()) {
+static KPerDomainSettings &setup_per_domain_policy(WebKitSettingsPrivate* const d, const QString &domain)
+{
+  if (domain.isEmpty())
     kWarning() << "setup_per_domain_policy: domain is empty";
-  }
+
   const QString ldomain = domain.toLower();
   PolicyMap::iterator it = d->domainPolicy.find(ldomain);
   if (it == d->domainPolicy.end()) {
@@ -272,15 +327,9 @@ void WebKitSettings::readDomainSettings(const KConfigGroup &config, bool reset,
 
 
 WebKitSettings::WebKitSettings()
-	:d (new WebKitSettingsPrivate())
+	:d (new WebKitSettingsPrivate)
 {
   init();
-}
-
-WebKitSettings::WebKitSettings(const WebKitSettings &other)
-	:d(new WebKitSettingsPrivate())
-{
-  *d = *other.d;
 }
 
 WebKitSettings::~WebKitSettings()
@@ -357,12 +406,18 @@ void WebKitSettings::init( KConfig * config, bool reset )
       d->adBlackList.clear();
       d->adWhiteList.clear();
 
-      QMap<QString,QString> entryMap = cgFilter.entryMap();
-      QMap<QString,QString>::ConstIterator it;
-      for( it = entryMap.constBegin(); it != entryMap.constEnd(); ++it )
+      /** read maximum age for filter list files, minimum is one day */
+      int htmlFilterListMaxAgeDays = cgFilter.readEntry(QString("HTMLFilterListMaxAgeDays")).toInt();
+      if (htmlFilterListMaxAgeDays < 1)
+          htmlFilterListMaxAgeDays = 1;
+
+      QMapIterator<QString,QString> it (cgFilter.entryMap());
+      while (it.hasNext())
       {
-          QString name = it.key();
-          QString url = it.value();
+          it.next();
+          int id = -1;
+          const QString name = it.key();
+          const QString url = it.value();
 
           if (name.startsWith(QLatin1String("Filter")))
           {
@@ -370,6 +425,39 @@ void WebKitSettings::init( KConfig * config, bool reset )
                   d->adWhiteList.addFilter(url);
               else
                   d->adBlackList.addFilter(url);
+          }
+          else if (name.startsWith("HTMLFilterListName-") && (id = name.mid(19).toInt()) > 0)
+          {
+              /** check if entry is enabled */
+              bool filterEnabled = cgFilter.readEntry(QString("HTMLFilterListEnabled-").append(QString::number(id))) != QLatin1String("false");
+
+              /** get url for HTMLFilterList */
+              KUrl url(cgFilter.readEntry(QString("HTMLFilterListURL-").append(QString::number(id))));
+
+              if (filterEnabled && url.isValid()) {
+                  /** determine where to cache HTMLFilterList file */
+                  QString localFile = cgFilter.readEntry(QString("HTMLFilterListLocalFilename-").append(QString::number(id)));
+                  localFile = KStandardDirs::locateLocal("data", "khtml/" + localFile);
+
+                  /** determine existance and age of cache file */
+                  QFileInfo fileInfo(localFile);
+
+                  /** load cached file if it exists, irrespective of age */
+                  if (fileInfo.exists())
+                      d->adblockFilterLoadList( localFile );
+
+                  /** if no cache list file exists or if it is too old ... */
+                  if (!fileInfo.exists() || fileInfo.lastModified().daysTo(QDateTime::currentDateTime()) > htmlFilterListMaxAgeDays)
+                  {
+                      /** ... in this case, refetch list asynchronously */
+                      kDebug(6000) << "Asynchronously fetching filter list from" << url << "to" << localFile;
+
+                      KIO::StoredTransferJob *job = KIO::storedGet( url, KIO::Reload, KIO::HideProgressInfo );
+                      QObject::connect( job, SIGNAL( result(KJob *) ), d, SLOT( adblockFilterResult(KJob *) ) );
+                      /** for later reference, store name of cache file */
+                      job->setProperty("webkitsettings_adBlock_filename", localFile);
+                  }
+              }
           }
       }
   }
@@ -452,7 +540,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
          d->m_smoothScrolling = KSmoothScrollingWhenEfficient;
       else
          d->m_smoothScrolling = KSmoothScrollingEnabled;
-    }
+    } 
 
     if ( reset || cgHtml.hasKey( "ZoomTextOnly" ) ) {
         d->m_zoomTextOnly = cgHtml.readEntry( "ZoomTextOnly", false );
@@ -668,6 +756,17 @@ void WebKitSettings::init( KConfig * config, bool reset )
     }
   }
 
+  // DNS Prefect support...
+  if ( reset || cgHtml.hasKey( "DNSPrefetch" ) )
+  {
+    // Enabled, Disabled, OnlyWWWAndSLD
+    QString value = cgHtml.readEntry( "DNSPrefetch", "Enabled" ).toLower();
+    if (value == "enabled")
+        QWebSettings::globalSettings()->setAttribute(QWebSettings::DnsPrefetchEnabled, true);
+    else
+        QWebSettings::globalSettings()->setAttribute(QWebSettings::DnsPrefetchEnabled, false);
+  }  
+
   // Sync with QWebSettings.
   if (!d->m_encoding.isEmpty())
       QWebSettings::globalSettings()->setDefaultTextEncoding(d->m_encoding);
@@ -695,6 +794,10 @@ void WebKitSettings::init( KConfig * config, bool reset )
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::SansSerifFont, sansSerifFontName());
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::CursiveFont, cursiveFontName());
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::FantasyFont, fantasyFontName());
+
+#if QTWEBKIT_VERSION >= QTWEBKIT_VERSION_CHECK(2, 2, 0)
+  QWebSettings::globalSettings()->setAttribute(QWebSettings::WebGLEnabled, true);
+#endif
 
   // These numbers should be calculated from real "logical" DPI/72, using a default dpi of 96 for now
   computeFontSizes(96);
@@ -802,15 +905,32 @@ bool WebKitSettings::isHideAdsEnabled() const
 
 bool WebKitSettings::isAdFiltered( const QString &url ) const
 {
-    if (d->m_adFilterEnabled)
-    {
-        if (!url.startsWith(QLatin1String("data:")))
-        {
-            // Check the blacklist, and only if that matches, the whitelist
-            return d->adBlackList.isUrlMatched(url) && !d->adWhiteList.isUrlMatched(url);
-        }
+    if (!d->m_adFilterEnabled)
+        return false;
+
+    if (url.startsWith(QLatin1String("data:")))
+        return false;
+
+    return d->adBlackList.isUrlMatched(url) && !d->adWhiteList.isUrlMatched(url);
+}
+
+QString WebKitSettings::adFilteredBy( const QString &url, bool *isWhiteListed ) const
+{
+    QString m = d->adWhiteList.urlMatchedBy(url);
+
+    if (!m.isEmpty()) {
+        if (isWhiteListed != 0)
+            *isWhiteListed = true;
+        return m;
     }
-    return false;
+
+    m = d->adBlackList.urlMatchedBy(url);
+    if (m.isEmpty())
+        return QString();
+
+    if (isWhiteListed != 0)
+        *isWhiteListed = false;
+    return m;
 }
 
 void WebKitSettings::addAdFilter( const QString &url )
@@ -1192,10 +1312,10 @@ void WebKitSettings::removeNonPasswordStorableSite(const QString &host)
     cg.sync();
 }
 
-K_GLOBAL_STATIC(WebKitSettings, s_webKitSettings)
-
 WebKitSettings* WebKitSettings::self()
 {
+    K_GLOBAL_STATIC(WebKitSettings, s_webKitSettings)
     return s_webKitSettings;
 }
 
+#include "webkitsettings.moc"
