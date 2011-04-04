@@ -58,10 +58,10 @@ binary-arch: build install
 	dh_installdocs
 	dh_lintian
 	dh_link
-	dh_strip --dbg-package=libkwebkit-dbg
+	dh_strip
 	dh_compress
 	dh_fixperms
-	dh_makeshlibs -Xkwebkitpart.so
+	dh_makeshlibs
 	dh_installdeb
 	dh_shlibdeps
 	dh_gencontrol
