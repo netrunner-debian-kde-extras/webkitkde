@@ -2,8 +2,11 @@ webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 
   * New upstream version; upstream moved to git
   * build against KDE 4.6; adjust build dependency
+  * Drop library package, there's only the kpart anymore;
+    conflict with the old libkwebkit-dev (FindKWebKitPart.cmake)
+  * remove mention of "kdelauncher" from CmakeLists.txt: not present in git
 
- -- Adrian von Bidder <cmot@debian.org>  Mon, 04 Apr 2011 21:16:00 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Mon, 04 Apr 2011 21:27:55 +0200
 
 webkitkde (0.9.6svn1187649-1) experimental; urgency=low
 
