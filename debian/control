@@ -5,8 +5,8 @@ Maintainer: Adrian von Bidder <cmot@debian.org>
 Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev (>= 4:4.6), libqtwebkit-dev, pkg-kde-tools
 Standards-Version: 3.9.1
 Homepage: http://techbase.kde.org/Projects/WebKit
-Vcs-Browser: https://fortytwo.ch/hg/pkg-webkitkde
-Vcs-Hg: https://fortytwo.ch/hg/pkg-webkitkde
+Vcs-Browser: https://fortytwo.ch/hg/avbidder/pkg-webkit/
+Vcs-Hg: https://fortytwo.ch/hg/avbidder/pkg-webkit/
 
 Package: kpart-webkit
 Architecture: any
