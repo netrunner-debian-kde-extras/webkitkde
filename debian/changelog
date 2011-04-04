@@ -1,8 +1,9 @@
 webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 
-  * New upstream version.
+  * New upstream version; upstream moved to git
+  * build against KDE 4.6; adjust build dependency
 
- -- Adrian von Bidder <cmot@debian.org>  Mon, 04 Apr 2011 21:12:29 +0200
+ -- Adrian von Bidder <cmot@debian.org>  Mon, 04 Apr 2011 21:16:00 +0200
 
 webkitkde (0.9.6svn1187649-1) experimental; urgency=low
 
