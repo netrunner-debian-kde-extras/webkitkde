@@ -42,63 +42,63 @@ public:
      * This enum specifies whether Java/JavaScript execution is allowed.
      */
     enum KJavaScriptAdvice {
-      KJavaScriptDunno=0,
-      KJavaScriptAccept,
-      KJavaScriptReject
+        KJavaScriptDunno=0,
+        KJavaScriptAccept,
+        KJavaScriptReject
     };
 
     enum KAnimationAdvice {
-      KAnimationDisabled=0,
-      KAnimationLoopOnce,
-      KAnimationEnabled
+        KAnimationDisabled=0,
+        KAnimationLoopOnce,
+        KAnimationEnabled
     };
 
     enum KSmoothScrollingMode {
-      KSmoothScrollingDisabled=0,
-      KSmoothScrollingWhenEfficient,
-      KSmoothScrollingEnabled
+        KSmoothScrollingDisabled=0,
+        KSmoothScrollingWhenEfficient,
+        KSmoothScrollingEnabled
     };
 
     /**
      * This enum specifies the policy for window.open
      */
     enum KJSWindowOpenPolicy {
-    	KJSWindowOpenAllow=0,
-    	KJSWindowOpenAsk,
-    	KJSWindowOpenDeny,
-    	KJSWindowOpenSmart
+        KJSWindowOpenAllow=0,
+        KJSWindowOpenAsk,
+        KJSWindowOpenDeny,
+        KJSWindowOpenSmart
     };
 
     /**
      * This enum specifies the policy for window.status and .defaultStatus
      */
     enum KJSWindowStatusPolicy {
-    	KJSWindowStatusAllow=0,
-    	KJSWindowStatusIgnore
+        KJSWindowStatusAllow=0,
+        KJSWindowStatusIgnore
     };
 
     /**
      * This enum specifies the policy for window.moveBy and .moveTo
      */
     enum KJSWindowMovePolicy {
-    	KJSWindowMoveAllow=0,
-    	KJSWindowMoveIgnore
+        KJSWindowMoveAllow=0,
+        KJSWindowMoveIgnore
     };
 
     /**
      * This enum specifies the policy for window.resizeBy and .resizeTo
      */
     enum KJSWindowResizePolicy {
-    	KJSWindowResizeAllow=0,
-    	KJSWindowResizeIgnore
+        KJSWindowResizeAllow=0,
+        KJSWindowResizeIgnore
     };
 
     /**
      * This enum specifies the policy for window.focus
      */
     enum KJSWindowFocusPolicy {
-    	KJSWindowFocusAllow=0,
-    	KJSWindowFocusIgnore
+        KJSWindowFocusAllow=0,
+        KJSWindowFocusIgnore
     };
 
     /**
@@ -180,6 +180,8 @@ public:
     bool isAdFilterEnabled() const;
     bool isHideAdsEnabled() const;
     void addAdFilter( const QString &url );
+    QString adFilteredBy( const QString &url, bool *isWhiteListed = 0 ) const;
+    
 
     // Access Keys
     bool accessKeysEnabled() const;
@@ -238,13 +240,13 @@ public:
 
     // Global config object stuff.
     static WebKitSettings* self();
+
+private:
     /**
      * @internal Constructor
      */
     WebKitSettings();
-    WebKitSettings(const WebKitSettings &other);
-
-private:
+  
     QString lookupFont(int i) const;
 
     WebKitSettingsPrivate* const d;

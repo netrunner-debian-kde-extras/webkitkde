@@ -24,7 +24,10 @@
 #ifndef WEBPAGE_H
 #define WEBPAGE_H
 
+#include "websslinfo.h"
+
 #include <KDE/KWebPage>
+#include <KDE/KParts/BrowserExtension>
 
 #include <QtCore/QUrl>
 #include <QtCore/QDebug>
@@ -33,7 +36,6 @@
 class KUrl;
 class WebSslInfo;
 class KWebKitPart;
-class QVariant;
 class QWebFrame;
 
 
@@ -41,7 +43,7 @@ class WebPage : public KWebPage
 {
     Q_OBJECT
 public:
-    WebPage(KWebKitPart *wpart, QWidget *parent);
+    WebPage(KWebKitPart *wpart, QWidget *parent = 0);
     ~WebPage();
 
     /**
@@ -97,13 +99,19 @@ Q_SIGNALS:
      */
     void loadAborted(const KUrl &url);
 
-    /**
-     * This signal is emitted whenever status message is received from javascript
-     * and the user's configuration allows it to be set.
-     */
-    void jsStatusBarMessage(const QString &);
-
 protected:
+    /**
+     * Returns the webkit part in use by this object.
+     * @internal
+     */
+    KWebKitPart* part() const;
+
+    /**
+     * Sets the webkit part to be used by this object.
+     * @internal
+     */
+    void setPart(KWebKitPart*);
+
     /**
      * Reimplemented for internal reasons, the API is not affected.
      * @internal
@@ -114,24 +122,63 @@ protected:
      * Reimplemented for internal reasons, the API is not affected.
      * @internal
      */
-    virtual bool acceptNavigationRequest(QWebFrame * frame, const QNetworkRequest & request, NavigationType type);
+    virtual bool acceptNavigationRequest(QWebFrame* frame, const QNetworkRequest& request, NavigationType type);
 
 protected Q_SLOTS:
-    void slotUnsupportedContent(QNetworkReply *reply);
-    void slotRequestFinished(QNetworkReply *reply);
-    void slotGeometryChangeRequested(const QRect &rect);
-    void slotWindowCloseRequested();
-    void slotStatusBarMessage(const QString &message);
+    void slotRequestFinished(QNetworkReply* reply);
+    virtual void slotGeometryChangeRequested(const QRect& rect);
 
 private:
-    bool checkLinkSecurity(const QNetworkRequest &req, NavigationType type) const;
-    bool checkFormData(const QNetworkRequest &req) const;
+    bool checkLinkSecurity(const QNetworkRequest& req, NavigationType type) const;
+    bool checkFormData(const QNetworkRequest& req) const;
     bool handleMailToUrl (const QUrl& , NavigationType type) const;
-    void setPageJScriptPolicy(const QUrl &url);
+    void setPageJScriptPolicy(const QUrl& url);
 
 private:
-    class WebPagePrivate;
-    WebPagePrivate* const d;
+    enum WebPageSecurity { PageUnencrypted, PageEncrypted, PageMixed };
+
+    int m_kioErrorCode;
+    bool m_ignoreError;
+    bool m_ignoreHistoryNavigationRequest;
+
+    WebSslInfo m_sslInfo;
+    QList<QUrl> m_requestQueue;
+    QWeakPointer<KWebKitPart> m_part;
+};
+
+
+/**
+ * This is a fake implementation of WebPage to workaround the ugly API used
+ * to request for the creation of a new window from javascript in QtWebKit.
+ *
+ * The KPart API for creating new windows requires all the information about the
+ * new window up front. Unfortunately QWebPage::createWindow function does not
+ * provide any of these necessary information except for the window type. All
+ * the other necessary information is emitted as signals instead! Hence, the
+ * need for this class to collect all of the necessary information, such as
+ * window name, size and position, before calling KPart's createNewWindow
+ * function.
+ */
+class NewWindowPage : public WebPage
+{
+    Q_OBJECT
+public:
+    NewWindowPage(WebWindowType type, KWebKitPart* part, QWidget* parent = 0);
+    virtual ~NewWindowPage();
+
+protected:
+    virtual bool acceptNavigationRequest(QWebFrame* frame, const QNetworkRequest& request, NavigationType type);
+
+protected Q_SLOTS:
+    void slotGeometryChangeRequested(const QRect& rect);
+    void slotMenuBarVisibilityChangeRequested(bool visible);
+    void slotStatusBarVisibilityChangeRequested(bool visible);
+    void slotToolBarVisibilityChangeRequested(bool visible);
+
+private:
+    KParts::WindowArgs m_windowArgs;
+    WebWindowType m_type;
+    bool m_createNewWindow;
 };
 
 #endif // WEBPAGE_H

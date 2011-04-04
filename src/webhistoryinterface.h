@@ -1,7 +1,7 @@
 /*
  * This file is part of the KDE project.
  *
- * Copyright (C) 2009 Dawit Alemayehu <adawit @ kde.org>
+ * Copyright (C) 2011 Dawit Alemayehu <adawit@kde.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,37 +19,19 @@
  * Boston, MA 02110-1301, USA.
  *
  */
-#ifndef NETWORKACCESSMANAGER_H
-#define NETWORKACCESSMANAGER_H
+#ifndef WEBHISTORYINTERFACE_H
+#define WEBHISTORYINTERFACE_H
 
-#include <KDE/KIO/AccessManager>
 
-#include <QtCore/QMultiHash>
+#include <QtWebKit/QWebHistoryInterface>
 
-class QWebFrame;
 
-namespace KDEPrivate {
-
- /**
-  * Re-implemented for internal reasons. API remains unaffected.
-  */
-class MyNetworkAccessManager : public KIO::AccessManager
+class WebHistoryInterface : public QWebHistoryInterface
 {
-    Q_OBJECT
-
 public:
-    MyNetworkAccessManager(QObject *parent = 0);
-
-protected:
-    virtual QNetworkReply *createRequest(Operation op, const QNetworkRequest &req, QIODevice *outgoingData = 0);
-
-private Q_SLOTS:
-    void slotFinished(bool);
-
-private:
-    QMultiHash<QWebFrame*, QUrl> m_blockedRequests;
+    WebHistoryInterface(QObject* parent = 0);
+    void addHistoryEntry (const QString & url);
+    bool historyContains (const QString & url) const;
 };
 
-}
-
-#endif // NETWORKACCESSMANAGER_P_H
+#endif //WEBHISTORYINTERFACE_H

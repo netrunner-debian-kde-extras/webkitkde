@@ -1,7 +1,7 @@
 /*
  * This file is part of the KDE project.
  *
- * Copyright (C) 2009 Dawit Alemayehu <adawit @ kde.org>
+ * Copyright (C) 2011 Dawit Alemayehu <adawit@kde.org>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -19,37 +19,23 @@
  * Boston, MA 02110-1301, USA.
  *
  */
-#ifndef NETWORKACCESSMANAGER_H
-#define NETWORKACCESSMANAGER_H
 
-#include <KDE/KIO/AccessManager>
+#include "webhistoryinterface.h"
 
-#include <QtCore/QMultiHash>
+#include <KDE/KParts/HistoryProvider>
 
-class QWebFrame;
 
-namespace KDEPrivate {
-
- /**
-  * Re-implemented for internal reasons. API remains unaffected.
-  */
-class MyNetworkAccessManager : public KIO::AccessManager
+WebHistoryInterface::WebHistoryInterface(QObject* parent)
+                    :QWebHistoryInterface(parent)
 {
-    Q_OBJECT
-
-public:
-    MyNetworkAccessManager(QObject *parent = 0);
-
-protected:
-    virtual QNetworkReply *createRequest(Operation op, const QNetworkRequest &req, QIODevice *outgoingData = 0);
-
-private Q_SLOTS:
-    void slotFinished(bool);
-
-private:
-    QMultiHash<QWebFrame*, QUrl> m_blockedRequests;
-};
-
 }
 
-#endif // NETWORKACCESSMANAGER_P_H
+void WebHistoryInterface::addHistoryEntry(const QString& url)
+{
+    KParts::HistoryProvider::self()->insert(url);
+}
+
+bool WebHistoryInterface::historyContains(const QString& url) const
+{
+    return KParts::HistoryProvider::self()->contains(url);
+}

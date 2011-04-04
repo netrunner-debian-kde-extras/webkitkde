@@ -24,10 +24,12 @@
 #define WEBKITPART_EXT_H
 
 #include <KDE/KParts/BrowserExtension>
+#include <KDE/KParts/TextExtension>
+#include <KDE/KParts/HtmlExtension>
 
-class QWebView;
 class KUrl;
 class KWebKitPart;
+class WebView;
 
 class WebKitBrowserExtension : public KParts::BrowserExtension
 {
@@ -68,23 +70,77 @@ public Q_SLOTS:
     void slotFrameInTab();
     void slotFrameInTop();
     void slotReloadFrame();
+    void slotBlockIFrame();
 
     void slotSaveImageAs();
     void slotSendImage();
+    void slotCopyImageURL();
     void slotCopyImage();
     void slotViewImage();
+    void slotBlockImage();
+    void slotBlockHost();
 
-    void slotCopyLinkLocation();
+    void slotCopyLinkURL();
     void slotSaveLinkAs();
 
     void slotViewDocumentSource();
     void slotViewFrameSource();
 
     void updateEditActions();
+    void slotPlayMedia();
+    void slotMuteMedia();
+    void slotLoopMedia();
+    void slotShowMediaControls();
+    void slotSaveMedia();
+    void slotCopyMedia();
 
 private:
-    class WebKitBrowserExtensionPrivate;
-    WebKitBrowserExtensionPrivate* const d;
+    WebView* view();
+    QWeakPointer<KWebKitPart> m_part;
+    QWeakPointer<WebView> m_view;
+    QString m_historyFileName;
+};
+
+/**
+ * @internal
+ * Implements the TextExtension interface
+ */
+class KWebKitTextExtension : public KParts::TextExtension
+{
+    Q_OBJECT
+public:
+    KWebKitTextExtension(KWebKitPart* part);
+
+    virtual bool hasSelection() const;
+    virtual QString selectedText(Format format) const;
+    virtual QString completeText(Format format) const;
+
+    KWebKitPart* part() const;
+};
+
+/**
+ * @internal
+ * Implements the HtmlExtension interface
+ */
+class KWebKitHtmlExtension : public KParts::HtmlExtension,
+                             public KParts::SelectorInterface
+{
+    Q_OBJECT
+    Q_INTERFACES(KParts::SelectorInterface)
+
+public:
+    KWebKitHtmlExtension(KWebKitPart* part);
+
+    // HtmlExtension
+    virtual KUrl baseUrl() const;
+    virtual bool hasSelection() const;
+
+    // SelectorInterface
+    virtual QueryMethods supportedQueryMethods() const;
+    virtual Element querySelector(const QString& query, KParts::SelectorInterface::QueryMethod method) const;
+    virtual QList<Element> querySelectorAll(const QString& query, KParts::SelectorInterface::QueryMethod method) const;
+
+    KWebKitPart* part() const;
 };
 
 #endif // WEBKITPART_EXT_H
