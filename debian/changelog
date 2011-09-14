@@ -3,6 +3,7 @@ webkitkde (1.2-1) unstable; urgency=low
   * I adopt the package, wich was orphaned due to the loss of Adrian.
   * New upstream release: 1.2
   * Update packaging to debhelper8.
+  * Provide debug package.
 
  -- Adrien Grellier <adrien.grellier@laposte.net>  Fri, 03 Feb 2012 21:10:23 +0100
 

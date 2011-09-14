@@ -15,3 +15,15 @@ Conflicts: libkwebkit-dev
 Description: WebKit KPart
  A Plug-In for the Konqueror web browser and other KDE applications allowing
  the WebKit HTML renderer to be used instead of the traditional KHTML.
+
+Package: kpart-webkit-dbg
+Section: debug
+Priority: extra
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, kpart-webkit (= ${binary:Version})
+Description: WebKit KPart - debugging symbols
+ This package contain debugging symbols for WebKit KPart.
+ They will automatically be used by gdb for debugging WebKit KPart issues.
+ .
+ This package is part of Webkit KPart.
+ 
