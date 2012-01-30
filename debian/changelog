@@ -1,3 +1,10 @@
+webkitkde (1.2-1) UNRELEASED; urgency=low
+
+  * Non-maintainer upload.
+  * new upstream release
+
+ -- Adrien Grellier <adrien.grellier@laposte.net>  Mon, 30 Jan 2012 20:21:24 +0100
+
 webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 
   * New upstream version; upstream moved to git
