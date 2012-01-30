@@ -124,8 +124,15 @@ protected:
      */
     virtual bool acceptNavigationRequest(QWebFrame* frame, const QNetworkRequest& request, NavigationType type);
 
+    /**
+     * Reimplemented for internal reasons, the API is not affected.
+     * @internal
+     */
+    virtual QString userAgentForUrl(const QUrl& url) const;
+
 protected Q_SLOTS:
     void slotRequestFinished(QNetworkReply* reply);
+    void slotUnsupportedContent(QNetworkReply* reply);
     virtual void slotGeometryChangeRequested(const QRect& rect);
 
 private:
@@ -174,6 +181,7 @@ protected Q_SLOTS:
     void slotMenuBarVisibilityChangeRequested(bool visible);
     void slotStatusBarVisibilityChangeRequested(bool visible);
     void slotToolBarVisibilityChangeRequested(bool visible);
+    void slotLoadFinished(bool);
 
 private:
     KParts::WindowArgs m_windowArgs;

@@ -60,7 +60,7 @@
 WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent, const QString &historyFileName)
                        :KParts::BrowserExtension(parent),
                         m_part(QWeakPointer<KWebKitPart>(parent)),
-                        m_historyFileName(historyFileName)
+                        m_historyContentSaver(new KSaveFile (historyFileName))
 {
     enableAction("cut", false);
     enableAction("copy", false);
@@ -70,6 +70,10 @@ WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent, const QStrin
 
 WebKitBrowserExtension::~WebKitBrowserExtension()
 {
+    if (!m_historyContentSaver->finalize()) {
+        kWarning() << "Failed to save session history to" << m_historyContentSaver->fileName();
+    }
+    delete m_historyContentSaver;
 }
 
 WebView* WebKitBrowserExtension::view()
@@ -81,26 +85,6 @@ WebView* WebKitBrowserExtension::view()
         m_view = QWeakPointer<WebView>(qobject_cast<WebView*>(m_part.data()->view()));
 
     return m_view.data();
-}
-
-void WebKitBrowserExtension::saveHistoryState()
-{
-    if (!view())
-        return;
-
-    if (!view()->page()->history()->count())
-        return;
-
-    KSaveFile saveFile (m_historyFileName, m_part.data()->componentData());
-    if (!saveFile.open())
-      return;
-
-    //kDebug() << "Saving history data to"  << saveFile.fileName();
-    QDataStream stream (&saveFile);
-    stream << *(view()->page()->history());
-    if (!saveFile.finalize())
-        kWarning() << "Failed to save session history to" << saveFile.fileName();
-
 }
 
 int WebKitBrowserExtension::xOffset()
@@ -125,7 +109,12 @@ void WebKitBrowserExtension::saveState(QDataStream &stream)
            << static_cast<qint32>(xOffset())
            << static_cast<qint32>(yOffset())
            << static_cast<qint32>(view()->page()->history()->currentItemIndex())
-           << m_historyFileName;
+           << m_historyContentSaver->fileName();
+
+    if (m_historyContentSaver->isOpen() || m_historyContentSaver->open()) {
+        QDataStream stream (m_historyContentSaver);
+        stream << *(view()->page()->history());
+    }
 }
 
 void WebKitBrowserExtension::restoreState(QDataStream &stream)
@@ -250,6 +239,19 @@ void WebKitBrowserExtension::reparseConfiguration()
 {
     // Force the configuration stuff to reparse...
     WebKitSettings::self()->init();
+}
+
+void WebKitBrowserExtension::disableScrolling()
+{
+    QWebView* currentView = view();
+    QWebPage* page = currentView ? currentView->page() : 0;
+    QWebFrame* frame = page ? page->mainFrame() : 0;
+
+    if (!frame)
+        return;
+
+    frame->setScrollBarPolicy(Qt::Horizontal, Qt::ScrollBarAlwaysOff);
+    frame->setScrollBarPolicy(Qt::Vertical, Qt::ScrollBarAlwaysOff);
 }
 
 void WebKitBrowserExtension::zoomIn()
@@ -438,19 +440,8 @@ void WebKitBrowserExtension::slotBlockHost()
 
 void WebKitBrowserExtension::slotCopyLinkURL()
 {
-    if (!view())
-        return;
-
-    KUrl safeURL(view()->contextMenuResult().linkUrl());
-    safeURL.setPass(QString());
-    // Set it in both the mouse selection and in the clipboard
-    QMimeData* mimeData = new QMimeData;
-    safeURL.populateMimeData(mimeData);
-    QApplication::clipboard()->setMimeData(mimeData, QClipboard::Clipboard);
-
-    mimeData = new QMimeData;
-    safeURL.populateMimeData(mimeData);
-    QApplication::clipboard()->setMimeData(mimeData, QClipboard::Selection);
+    if (view())
+        view()->triggerPageAction(QWebPage::CopyLinkToClipboard);
 }
 
 void WebKitBrowserExtension::slotSaveLinkAs()
@@ -568,7 +559,7 @@ static KUrl mediaUrlFrom(QWebElement& element)
     if (src.isEmpty())
         return KUrl();
 
-    return KUrl(frame->baseUrl().resolved(QUrl::fromEncoded(src.toAscii(), QUrl::StrictMode)));
+    return KUrl(frame->baseUrl().resolved(QUrl::fromEncoded(QUrl::toPercentEncoding(src), QUrl::StrictMode)));
 }
 
 void WebKitBrowserExtension::slotSaveMedia()
