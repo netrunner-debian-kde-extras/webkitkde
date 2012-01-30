@@ -49,17 +49,17 @@
 #include <QtWebKit/QWebFrame>
 #include <QtWebKit/QWebElement>
 #include <QtWebKit/QWebHitTestResult>
+#include <QtWebKit/QWebInspector>
 
 #define QL1S(x)   QLatin1String(x)
 #define ALTERNATE_DEFAULT_PROVIDER    QL1S("google")
 #define ALTERNATE_SEARCH_PROVIDERS    QStringList() << QL1S("google") << QL1S("wikipedia") << QL1S("webster") << QL1S("dmoz")
 
-
-
 WebView::WebView(KWebKitPart* part, QWidget* parent)
         :KWebView(parent, false),
          m_actionCollection(new KActionCollection(this)),
-         m_part(QWeakPointer<KWebKitPart>(part))
+         m_part(QWeakPointer<KWebKitPart>(part)),
+         m_webInspector(0)
 {
     setAcceptDrops(true);
 
@@ -69,6 +69,7 @@ WebView::WebView(KWebKitPart* part, QWidget* parent)
 
 WebView::~WebView()
 {
+    //kDebug();
 }
 
 void WebView::loadUrl(const KUrl& url, const KParts::OpenUrlArguments& args, const KParts::BrowserArguments& bargs)
@@ -76,7 +77,7 @@ void WebView::loadUrl(const KUrl& url, const KParts::OpenUrlArguments& args, con
     page()->setProperty("NavigationTypeUrlEntered", true);
 
     if (args.reload()) {
-      triggerPageAction(KWebPage::Reload);
+      reload();
       return;
     }
 
@@ -313,7 +314,7 @@ void WebView::partActionPopupMenu(KParts::BrowserExtension::ActionGroupMap& part
                                       !m_result.imageUrl().isValid() &&
                                       !m_result.isContentSelected());
     const bool showInspectorAction = settings()->testAttribute(QWebSettings::DeveloperExtrasEnabled);
-    
+
     if (showDocSourceAction || showInspectorAction) {
         KAction *separatorAction = new KAction(this);
         separatorAction->setSeparator(true);
@@ -323,8 +324,19 @@ void WebView::partActionPopupMenu(KParts::BrowserExtension::ActionGroupMap& part
     if (showDocSourceAction)
         partActions.append(m_part.data()->actionCollection()->action("viewDocumentSource"));
 
-    if (showInspectorAction)
+    if (showInspectorAction) {
+        if (!m_webInspector) {
+            m_webInspector = new QWebInspector;
+            m_webInspector->setPage(page());
+            connect(page(), SIGNAL(destroyed()), m_webInspector, SLOT(deleteLater()));
+        }
         partActions.append(pageAction(QWebPage::InspectElement));
+    } else {
+        if (m_webInspector) {
+            delete m_webInspector;
+            m_webInspector = 0;
+        }
+    }
 
     partGroupMap.insert("partactions", partActions);
 }
