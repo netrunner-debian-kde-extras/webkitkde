@@ -1,13 +1,16 @@
 This package was debianized by
     Adrian von Bidder <cmot@debian.org>
+and then 
+    Adrien Grellier <adrien.grellier@laposte.net>
 
-The package is based on a Subversion snapshot from
-    svn://anonsvn.kde.org/home/kde/branches/stable/extragear-kde4/base/kwebkitpart
+
+The package is based on a git snapshot from
+    https://projects.kde.org/projects/extragear/base/kwebkitpart
 
 Copyright and Upstream Authors:
 
     Copyright (C) 1998, 1999 Torben Weis <weis@kde.org>
-    Copyright (C) 1999, 2007 David Faure <faure@kde.org>
+    Copyright (C) 1999 David Faure <faure@kde.org>
     Copyright (C) 2000 Malte Starostik <malte@kde.org>
     Copyright (C) 2000-2003,2006 George Staikos <staikos@kde.org>
     Copyright (C) 2005 Ivor Hewitt <ivor@kde.org>
@@ -20,9 +23,9 @@ Copyright and Upstream Authors:
     Copyright (C) 2008 Laurent Montel <montel@kde.org>
     Copyright (C) 2008 Maksim Orlovich <maksim@kde.org>
     Copyright (C) 2008 Vyacheslav Tokarev <tsjoker@gmail.com>
-    Copyright (C) 2008-2009 Urs Wolfer <uwolfer@kde.org>
+    Copyright (C) 2008-2010 Urs Wolfer <uwolfer@kde.org>
     Copyright (C) 2009 Nokia Corporation and/or its subsidiary(-ies)
-    Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
+    Copyright (C) 2009, 2011 Dawit Alemayehu <adawit@kde.org>
 
 License:
 
@@ -44,5 +47,6 @@ On Debian systems, the complete text of the GNU Lesser General
 Public License can be found in `/usr/share/common-licenses/LGPL'.
 
 The Debian packaging is © 2009, Adrian von Bidder <cmot@debian.org> and
+© 2012, Adrien Grellier <adrien.grellier@laposte.net> and
 is licensed under the same terms.
 
