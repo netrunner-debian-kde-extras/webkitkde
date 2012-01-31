@@ -1,7 +1,0 @@
-File by file:
-control:
- * after squeeze release: remove conflicts/replaces on old package names (that
-   were never in testing.)
-
-libkwebkit1.symbols:
- * add operator delete for kfreebsd
