@@ -1,9 +1,9 @@
-webkitkde (1.2-1) UNRELEASED; urgency=low
+webkitkde (1.2-1) unstable; urgency=low
 
-  * Non-maintainer upload.
-  * new upstream release
+  * I adopt the package, wich was orphaned due to the loss of Adrian.
+  * New upstream release: 1.2
 
- -- Adrien Grellier <adrien.grellier@laposte.net>  Mon, 30 Jan 2012 20:21:24 +0100
+ -- Adrien Grellier <adrien.grellier@laposte.net>  Fri, 03 Feb 2012 21:10:23 +0100
 
 webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 

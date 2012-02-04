@@ -3,7 +3,7 @@ Section: web
 Priority: optional
 Maintainer: Adrien Grellier <adrien.grellier@laposte.net>
 Build-Depends: cmake, debhelper (>= 7), kdelibs5-dev (>= 4:4.6), libqtwebkit-dev, pkg-kde-tools
-Standards-Version: 3.9.1
+Standards-Version: 3.9.2
 Homepage: http://techbase.kde.org/Projects/WebKit
 Vcs-Browser: http://adrieng.homeip.net/cgi-bin/hgweb.cgi/webkitkde/
 Vcs-Hg: http://adrieng.homeip.net/cgi-bin/hgweb.cgi/webkitkde/
