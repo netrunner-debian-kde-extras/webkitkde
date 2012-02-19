@@ -7,7 +7,7 @@ build-arch: build-stamp
 build-indep: build-stamp
 
 override_dh_auto_configure:
-	dh_auto_configure -Skde -- -DCMAKE_USE_RELATIVE_PATHS=ON
+	dh_auto_configure -Skde -- -DCMAKE_USE_RELATIVE_PATHS=ON -DCMAKE_BUILD_TYPE="RelWithDebInfo"
 
 override_dh_install:
 	dh_install --autodest --list-missing
