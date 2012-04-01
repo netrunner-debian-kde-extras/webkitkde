@@ -1,75 +1,19 @@
-#!/usr/bin/make -f
+#! /usr/bin/make -f
+#
+DH_ALWAYS_EXCLUDE:=CVS:.svn:.svnignore:.hg:.hgignore:.git
 
-include /usr/share/pkg-kde-tools/makefiles/1/variables.mk
-#export DH_VERBOSE=1
-
-ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
-    NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
-    MAKEFLAGS += -j$(NUMJOBS)
-endif
-
-configure: configure-stamp
-configure-stamp:
-	dh_testdir
-
-	mkdir build || true
-	cd build && cmake .. \
-            -DCMAKE_INSTALL_PREFIX=/usr \
-            -DCMAKE_CXX_FLAGS="-Wl,--as-needed -Wl,-z,defs" \
-            $(DEB_CMAKE_KDE4_FLAGS)
-
-	touch configure-stamp
-
-build: build-stamp
+export LDFLAGS = "-Wl,--as-needed" "-Wl,--no-undefined" "-Wl,-z,defs"
 build-arch: build-stamp
 build-indep: build-stamp
 
-build-stamp: configure-stamp
-	dh_testdir
+override_dh_auto_configure:
+	dh_auto_configure -Skde -- -DCMAKE_USE_RELATIVE_PATHS=ON -DCMAKE_BUILD_TYPE="RelWithDebInfo"
 
-	$(MAKE) $(MAKEFLAGS) -C build
+override_dh_install:
+	dh_install --autodest --list-missing
 
-	touch $@
+%:
+	dh $@ --parallel --dbg-package=kpart-webkit-dbg --with kde
 
-clean:
-	dh_testdir
-	dh_testroot
-	rm -f build-stamp configure-stamp
+.PHONY: override_dh_auto_test
 
-	rm -rf build
-
-	dh_clean
-
-install: build
-	dh_testdir
-	dh_testroot
-	dh_prep
-	dh_installdirs
-
-	$(MAKE) -C build DESTDIR=$(CURDIR)/debian/tmp install
-
-
-binary-indep: build install
-
-binary-arch: build install
-	dh_testdir
-	dh_testroot
-	dh_install --fail-missing
-	dh_installchangelogs
-	dh_installdocs
-	dh_lintian
-	dh_link
-	dh_strip
-	dh_compress
-	dh_fixperms
-	dh_makeshlibs
-	dh_installdeb
-	dh_shlibdeps
-	dh_gencontrol
-	dh_md5sums
-	dh_builddeb
-
-binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary install configure
-
-# vim: set filetype=make
