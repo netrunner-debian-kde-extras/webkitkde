@@ -7,4 +7,4 @@ include(MacroLibrary)
 
 add_subdirectory(icons)
 add_subdirectory(src)
-#add_subdirectory(kdelauncher)
+add_subdirectory(kdelauncher)
