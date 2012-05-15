@@ -1,0 +1,36 @@
+Description: disable check for download manager for KDE 4.6
+checkForDownloadManager is not declared anywhere. As it is used with KDE 4.6
+(and KDE 4.6 is not in testing anymore) we can disable it without much problem.
+ .
+ webkitkde (1.2-1) unstable; urgency=low
+ .
+   * I adopt the package, wich was orphaned due to the loss of Adrian.
+   * New upstream release: 1.2
+   * Update packaging to debhelper8.
+   * Provide debug package.
+Author: Adrien Grellier <adrien.grellier@laposte.net>
+
+---
+The information above should follow the Patch Tagging Guidelines, please
+checkout http://dep.debian.net/deps/dep3/ to learn about the format. Here
+are templates for supplementary fields that you might want to add:
+
+Origin: <vendor|upstream|other>, <url of original patch>
+Bug: <url in upstream bugtracker>
+Bug-Debian: http://bugs.debian.org/<bugnumber>
+Bug-Ubuntu: https://launchpad.net/bugs/<bugnumber>
+Forwarded: <no|not-needed|url proving that it has been forwarded>
+Reviewed-By: <name and email of someone who approved the patch>
+Last-Update: <YYYY-MM-DD>
+
+--- webkitkde-1.2.orig/src/webpage.cpp
++++ webkitkde-1.2/src/webpage.cpp
+@@ -554,7 +554,7 @@ void WebPage::slotUnsupportedContent(QNe
+ #if KDE_IS_VERSION(4,6,41)
+     KIO::AccessManager::putReplyOnHold(reply);
+     QString downloadCmd;
+-    checkForDownloadManager(view(), downloadCmd);
++    // checkForDownloadManager(view(), downloadCmd);
+     if (!downloadCmd.isEmpty()) {
+         reply->setProperty("DownloadManagerExe", downloadCmd);
+     }
