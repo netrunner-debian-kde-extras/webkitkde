@@ -1,11 +1,16 @@
 webkitkde (1.2-1) unstable; urgency=low
 
-  * I adopt the package, wich was orphaned due to the loss of Adrian.
-  * New upstream release: 1.2
+  [Adrien Grellier]
+  * New Maintainer (Closes: #624448)
+  * FTBFS with GCC-4.7 (Closes: #667414) 
+  * New upstream release 1.2
+  * correct lintian warnings
+
+  [Raúl Sánchez Siles]
   * Update packaging to debhelper8.
   * Provide debug package.
 
- -- Adrien Grellier <adrien.grellier@laposte.net>  Fri, 03 Feb 2012 21:10:23 +0100
+ -- Adrien Grellier <adrien.grellier@laposte.net>  Tue, 15 May 2012 20:42:22 +0200
 
 webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 
