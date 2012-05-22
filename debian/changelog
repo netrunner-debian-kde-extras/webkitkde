@@ -1,3 +1,9 @@
+webkitkde (1.2+git80f32976-1) UNRELEASED; urgency=low
+
+  * New upstream version.
+
+ -- Raúl Sánchez Siles <rasasi78@gmail.com>  Tue, 22 May 2012 19:52:45 +0200
+
 webkitkde (1.2-1) unstable; urgency=low
 
   [Adrien Grellier]
