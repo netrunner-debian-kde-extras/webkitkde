@@ -1,22 +1,16 @@
 webkitkde (1.2+git80f32976-1) UNRELEASED; urgency=low
 
-  * New upstream version.
-
- -- Raúl Sánchez Siles <rasasi78@gmail.com>  Tue, 22 May 2012 19:52:45 +0200
-
-webkitkde (1.2-1) unstable; urgency=low
-
   [Adrien Grellier]
   * New Maintainer (Closes: #624448)
   * FTBFS with GCC-4.7 (Closes: #667414) 
   * New upstream release 1.2
-  * correct lintian warnings
+  * Correct lintian warnings
 
   [Raúl Sánchez Siles]
   * Update packaging to debhelper8.
   * Provide debug package.
 
- -- Adrien Grellier <adrien.grellier@laposte.net>  Tue, 15 May 2012 20:42:22 +0200
+ -- Raúl Sánchez Siles <rasasi78@gmail.com>  Tue, 22 May 2012 19:52:45 +0200
 
 webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 
