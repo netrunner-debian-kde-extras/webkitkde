@@ -6,20 +6,18 @@
  * Copyright (C) 2008 Laurent Montel <montel@kde.org>
  * Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or (at your
+ * option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
  *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 #ifndef WEBVIEW_H
@@ -40,7 +38,7 @@ class WebView : public KWebView
     Q_OBJECT
 public:
     WebView(KWebKitPart* part, QWidget* parent);
-    ~WebView();   
+    ~WebView();
 
     /**
      * Same as QWebPage::load, but with KParts style arguments instead.
@@ -72,21 +70,41 @@ protected:
      */
     virtual void contextMenuEvent(QContextMenuEvent*);
 
+    /**
+     * Reimplemented for internal reasons, the API is not affected.
+     *
+     * @see QWidget::keyPressEvent
+     * @internal
+     */
+    virtual void keyPressEvent(QKeyEvent*);
+
+    /**
+     * Reimplemented for internal reasons, the API is not affected.
+     *
+     * @see QObject::timerEvent
+     * @internal
+     */
+    virtual void timerEvent(QTimerEvent*);
+
+private Q_SLOTS:
+    void slotStopAutoScroll();
+
+private:
+    void editableContentActionPopupMenu(KParts::BrowserExtension::ActionGroupMap&);
     void selectActionPopupMenu(KParts::BrowserExtension::ActionGroupMap&);
     void linkActionPopupMenu(KParts::BrowserExtension::ActionGroupMap&);
     void partActionPopupMenu(KParts::BrowserExtension::ActionGroupMap &);
     void multimediaActionPopupMenu(KParts::BrowserExtension::ActionGroupMap&);
-
-private Q_SLOTS:
-    void slotOpenSelection();
-
-private:
     void addSearchActions(QList<QAction*>& selectActions, QWebView*);
 
     KActionCollection* m_actionCollection;
     QWebHitTestResult m_result;
     QWeakPointer<KWebKitPart> m_part;
     QWebInspector* m_webInspector;
+
+    qint32 m_autoScrollTimerId;
+    qint32 m_verticalAutoScrollSpeed;
+    qint32 m_horizontalAutoScrollSpeed;
 };
 
 #endif // WEBVIEW_H

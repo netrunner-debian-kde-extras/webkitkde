@@ -5,20 +5,18 @@
  * Copyright (C) 2008 - 2010 Urs Wolfer <uwolfer @ kde.org>
  * Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or (at your
+ * option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
  *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -30,6 +28,7 @@
 #include "sslinfodialog_p.h"
 #include "networkaccessmanager.h"
 #include "settings/webkitsettings.h"
+#include "webpluginfactory.h"
 
 #include <kdeversion.h>
 #include <KDE/KMessageBox>
@@ -43,10 +42,11 @@
 #include <KDE/KDebug>
 #include <KDE/KFileDialog>
 #include <KDE/KProtocolInfo>
-#include <KDE/KGlobalSettings>
+#include <KDE/KStringHandler>
 #include <KIO/Job>
 #include <KIO/AccessManager>
 #include <KIO/Scheduler>
+#include <KParts/HtmlExtension>
 
 #include <QtCore/QFile>
 #include <QtGui/QApplication>
@@ -68,28 +68,22 @@ WebPage::WebPage(KWebKitPart *part, QWidget *parent)
         :KWebPage(parent, (KWebPage::KPartsIntegration|KWebPage::KWalletIntegration)),
          m_kioErrorCode(0),
          m_ignoreError(false),
-         m_ignoreHistoryNavigationRequest(true),
+         m_noJSOpenWindowCheck(false),
          m_part(QWeakPointer<KWebKitPart>(part))
 {
     // FIXME: Need a better way to handle request filtering than to inherit
     // KIO::Integration::AccessManager...
     KDEPrivate::MyNetworkAccessManager *manager = new KDEPrivate::MyNetworkAccessManager(this);
-    QWidget* window = parent ? parent->window() : 0;
-
-    if (window) {
-#if KDE_IS_VERSION(4,6,41)
-        manager->setWindow(window);
-#else
-        manager->setCookieJarWindowId(window->winId());
-#endif
-    }
-
-#if KDE_IS_VERSION(4,6,41)
     manager->setEmitReadyReadOnMetaDataChange(true);
-#endif
-
     manager->setCache(0);
+    QWidget* window = parent ? parent->window() : 0;
+    if (window) {
+        manager->setWindow(window);
+    }
     setNetworkAccessManager(manager);
+
+    setPluginFactory(new WebPluginFactory(part));
+
     setSessionMetaData(QL1S("ssl_activate_warnings"), QL1S("TRUE"));
 
     // Set font sizes accordingly...
@@ -112,21 +106,14 @@ WebPage::WebPage(KWebKitPart *part, QWidget *parent)
         QWebSecurityOrigin::addLocalScheme(protocol);
     }
 
-    // Set the per page user style sheet as specified in WebKitSettings...
-    // TODO: Determine how a per page style sheets settings interacts with a
-    // global one. Is it an intersection of the two or a complete override ?
-    if (!QWebSettings::globalSettings()->userStyleSheetUrl().isValid())
-        settings()->setUserStyleSheetUrl((QL1S("data:text/css;charset=utf-8;base64,") +
-                                          WebKitSettings::self()->settingsToCSS().toUtf8().toBase64()));
-
     connect(this, SIGNAL(geometryChangeRequested(QRect)),
             this, SLOT(slotGeometryChangeRequested(QRect)));
     connect(this, SIGNAL(downloadRequested(QNetworkRequest)),
             this, SLOT(downloadRequest(QNetworkRequest)));
-    connect(this, SIGNAL(unsupportedContent(QNetworkReply *)),
+    connect(this, SIGNAL(unsupportedContent(QNetworkReply*)),
             this, SLOT(slotUnsupportedContent(QNetworkReply*)));
-    connect(networkAccessManager(), SIGNAL(finished(QNetworkReply *)),
-            this, SLOT(slotRequestFinished(QNetworkReply *)));    
+    connect(networkAccessManager(), SIGNAL(finished(QNetworkReply*)),
+            this, SLOT(slotRequestFinished(QNetworkReply*)));    
 }
 
 WebPage::~WebPage()
@@ -268,7 +255,7 @@ bool WebPage::extension(Extension extension, const ExtensionOption *option, Exte
         if (!m_ignoreError) {
           const QWebPage::ErrorPageExtensionOption *extOption = static_cast<const QWebPage::ErrorPageExtensionOption*>(option);
           QWebPage::ErrorPageExtensionReturn *extOutput = static_cast<QWebPage::ErrorPageExtensionReturn*>(output);
-          if (extOutput && extOption && extOption->domain == QWebPage::QtNetwork) {
+          if (extOutput && extOption && extOption->domain != QWebPage::WebKit) {
             extOutput->content = errorPage(m_kioErrorCode, extOption->errorString, extOption->url).toUtf8();
             extOutput->baseUrl = extOption->url;
             return true;
@@ -318,7 +305,9 @@ QWebPage *WebPage::createWindow(WebWindowType type)
     // Crete an instance of NewWindowPage class to capture all the
     // information we need to create a new window. See documentation of
     // the class for more information...
-    return new NewWindowPage(type, part(), 0);
+    NewWindowPage* page = new NewWindowPage(type, part(), m_noJSOpenWindowCheck);
+    m_noJSOpenWindowCheck = false;
+    return page;
 }
 
 // Returns true if the scheme and domain of the two urls match...
@@ -348,7 +337,7 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
 
     // Handle "mailto:" url here...
     if (handleMailToUrl(reqUrl, type))
-      return false;
+        return false;
 
     const bool isMainFrameRequest = (frame == mainFrame());
     const bool isTypedUrl = property("NavigationTypeUrlEntered").toBool();
@@ -356,7 +345,7 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
     /*
       NOTE: We use a dynamic QObject property called "NavigationTypeUrlEntered"
       to distinguish between requests generated by user entering a url vs those
-      that were generated programatically through javascript.
+      that were generated programatically through javascript (AJAX requests).
     */
     if (isMainFrameRequest && isTypedUrl)
       setProperty("NavigationTypeUrlEntered", QVariant());
@@ -365,25 +354,25 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
         // inPage requests are those generarted within the current page through
         // link clicks, javascript queries, and button clicks (form submission).
         bool inPageRequest = true;
-
         switch (type) {
         case QWebPage::NavigationTypeFormSubmitted:
-        case QWebPage::NavigationTypeFormResubmitted:
             if (!checkFormData(request))
                 return false;
             break;
+        case QWebPage::NavigationTypeFormResubmitted:
+            if (!checkFormData(request))
+                return false;
+            // TODO: Prompt user for form re-submission ???
+            break;
         case QWebPage::NavigationTypeBackOrForward:
-            // NOTE: This is necessary because restoring QtWebKit's history causes
-            // it to automatically navigate to the last item.
-            if (m_ignoreHistoryNavigationRequest) {
-                m_ignoreHistoryNavigationRequest = false;
-                //kDebug() << "Rejected history navigation to" << history()->currentItem().url();
+            // If history navigation is locked, ignore all such requests...
+            if (property("HistoryNavigationLocked").toBool()) {
+                setProperty("HistoryNavigationLocked", QVariant());
+                kDebug() << "Rejected history navigation because 'HistoryNavigationLocked' property is set!";
                 return false;
             }
-            /*
-            kDebug() << "Navigating to item (" << history()->currentItemIndex()
-                << "of" << history()->count() << "):" << history()->currentItem().url();
-            */
+            //kDebug() << "Navigating to item (" << history()->currentItemIndex()
+            //         << "of" << history()->count() << "):" << history()->currentItem().url();
             inPageRequest = false;
             break;
         case QWebPage::NavigationTypeReload:
@@ -392,8 +381,6 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
             break;
         case QWebPage::NavigationTypeOther:
             inPageRequest = !isTypedUrl;
-            if (m_ignoreHistoryNavigationRequest)
-                m_ignoreHistoryNavigationRequest = false;
             break;
         default:
             break;
@@ -407,15 +394,15 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
                 setRequestMetaData(QL1S("ssl_was_in_use"), QL1S("TRUE"));
         }
 
-        if (isMainFrameRequest) {
-            setRequestMetaData(QL1S("main_frame_request"), QL1S("TRUE"));
-        } else {
-            setRequestMetaData(QL1S("main_frame_request"), QL1S("FALSE"));
-        }
+        // Set the "main_frame_request" meta-data to aid SSL verification in KIO.
+        setRequestMetaData(QL1S("main_frame_request"), (isMainFrameRequest ? QL1S("TRUE") : QL1S("FALSE")));
 
         // Insert the request into the queue...
         reqUrl.setUserInfo(QString());
         m_requestQueue << reqUrl;
+    } else {
+        // If request came from javascript, set m_noJSOpenWindowCheck to true.
+        m_noJSOpenWindowCheck = (!isTypedUrl && type != QWebPage::NavigationTypeOther);
     }
 
     return KWebPage::acceptNavigationRequest(frame, request, type);
@@ -429,7 +416,7 @@ QString WebPage::userAgentForUrl(const QUrl& url) const
     const int index = userAgent.indexOf(QL1S(" U;"), -1, Qt::CaseInsensitive);
     if (index > -1)
         userAgent.remove(index, 3);
-    
+
     return userAgent.trimmed();
 }
 
@@ -549,32 +536,36 @@ void WebPage::slotRequestFinished(QNetworkReply *reply)
     }
 }
 
+static bool isBlankUrl(const KUrl& url)
+{
+    return (url.isEmpty() || url.url() == QL1S("about:blank"));
+}
+
 void WebPage::slotUnsupportedContent(QNetworkReply* reply)
 {
     //kDebug() << reply->url();
     QString mimeType;
     KIO::MetaData metaData;
 
-#if KDE_IS_VERSION(4,6,41)
     KIO::AccessManager::putReplyOnHold(reply);
     QString downloadCmd;
     checkForDownloadManager(view(), downloadCmd);
     if (!downloadCmd.isEmpty()) {
         reply->setProperty("DownloadManagerExe", downloadCmd);
     }
+
     if (KWebPage::handleReply(reply, &mimeType, &metaData)) {
         reply->deleteLater();
-        if (qobject_cast<NewWindowPage*>(this) && m_part.data()->url().url() == QL1S("about:blank")) {
+        if (qobject_cast<NewWindowPage*>(this) && isBlankUrl(m_part.data()->url())) {
             m_part.data()->closeUrl();
-            delete m_part.data();
+            if (m_part.data()->arguments().metaData().contains(QL1S("new-window"))) {
+                m_part.data()->widget()->topLevelWidget()->close();
+            } else {
+                delete m_part.data();
+            }
         }
         return;
     }
-#else
-    downloadResponse(reply);
-    reply->deleteLater();
-    return;
-#endif
 
     //kDebug() << "mimetype=" << mimeType << "metadata:" << metaData;
 
@@ -597,7 +588,7 @@ void WebPage::slotGeometryChangeRequested(const QRect & rect)
     // time of its creation, which is always the case in QWebPage::createWindow,
     // then any move operation will seem not to work. That is because the new
     // window will be in maximized mode where moving it will not be possible...
-    if (WebKitSettings::self()->windowMovePolicy(host) == WebKitSettings::KJSWindowMoveAllow &&
+    if (WebKitSettings::self()->windowMovePolicy(host) == KParts::HtmlSettingsInterface::JSWindowMoveAllow &&
         (view()->x() != rect.x() || view()->y() != rect.y()))
         emit part()->browserExtension()->moveTopLevelWidget(rect.x(), rect.y());
 
@@ -618,7 +609,7 @@ void WebPage::slotGeometryChangeRequested(const QRect & rect)
         return;
     }
 
-    if (WebKitSettings::self()->windowResizePolicy(host) == WebKitSettings::KJSWindowResizeAllow) {
+    if (WebKitSettings::self()->windowResizePolicy(host) == KParts::HtmlSettingsInterface::JSWindowResizeAllow) {
         //kDebug() << "resizing to " << width << "x" << height;
         emit part()->browserExtension()->resizeTopLevelWidget(width, height);
     }
@@ -633,7 +624,7 @@ void WebPage::slotGeometryChangeRequested(const QRect & rect)
     if (bottom > sg.bottom())
         moveByY = - bottom + sg.bottom(); // always <0
 
-    if ((moveByX || moveByY) && WebKitSettings::self()->windowMovePolicy(host) == WebKitSettings::KJSWindowMoveAllow)
+    if ((moveByX || moveByY) && WebKitSettings::self()->windowMovePolicy(host) == KParts::HtmlSettingsInterface::JSWindowMoveAllow)
         emit part()->browserExtension()->moveTopLevelWidget(view()->x() + moveByX, view()->y() + moveByY);
 }
 
@@ -728,6 +719,7 @@ static QUrl sanitizeMailToUrl(const QUrl &url, QStringList& files) {
     while (it.hasNext()) {
         QPair<QString, QString> queryItem = it.next();
         if (queryItem.first.contains(QL1C('@')) && queryItem.second.isEmpty()) {
+            // ### DF: this hack breaks mailto:faure@kde.org, kmail doesn't expect mailto:?to=faure@kde.org
             queryItem.second = queryItem.first;
             queryItem.first = "to";
         } else if (QString::compare(queryItem.first, QL1S("attach"), Qt::CaseInsensitive) == 0) {
@@ -789,10 +781,10 @@ void WebPage::setPageJScriptPolicy(const QUrl &url)
     settings()->setAttribute(QWebSettings::JavascriptEnabled,
                              WebKitSettings::self()->isJavaScriptEnabled(hostname));
 
-    const WebKitSettings::KJSWindowOpenPolicy policy = WebKitSettings::self()->windowOpenPolicy(hostname);
+    const KParts::HtmlSettingsInterface::JSWindowOpenPolicy policy = WebKitSettings::self()->windowOpenPolicy(hostname);
     settings()->setAttribute(QWebSettings::JavascriptCanOpenWindows,
-                             (policy != WebKitSettings::KJSWindowOpenDeny &&
-                              policy != WebKitSettings::KJSWindowOpenSmart));
+                             (policy != KParts::HtmlSettingsInterface::JSWindowOpenDeny &&
+                              policy != KParts::HtmlSettingsInterface::JSWindowOpenSmart));
 }
 
 
@@ -801,9 +793,9 @@ void WebPage::setPageJScriptPolicy(const QUrl &url)
 
 /************************************* Begin NewWindowPage ******************************************/
 
-NewWindowPage::NewWindowPage(WebWindowType type, KWebKitPart* part, QWidget* parent)
-              :WebPage(part, parent),
-               m_type(type), m_createNewWindow(true)
+NewWindowPage::NewWindowPage(WebWindowType type, KWebKitPart* part, bool disableJSOpenwindowCheck, QWidget* parent)
+              :WebPage(part, parent) , m_type(type) , m_createNewWindow(true)
+              , m_disableJSOpenwindowCheck(disableJSOpenwindowCheck)
 {
     Q_ASSERT_X (part, "NewWindowPage", "Must specify a valid KPart");
 
@@ -813,7 +805,7 @@ NewWindowPage::NewWindowPage(WebWindowType type, KWebKitPart* part, QWidget* par
             this, SLOT(slotToolBarVisibilityChangeRequested(bool)));
     connect(this, SIGNAL(statusBarVisibilityChangeRequested(bool)),
             this, SLOT(slotStatusBarVisibilityChangeRequested(bool)));
-    connect(this, SIGNAL(loadFinished(bool)), this, SLOT(slotLoadFinished(bool)));
+    connect(mainFrame(), SIGNAL(loadFinished(bool)), this, SLOT(slotLoadFinished(bool)));
 }
 
 NewWindowPage::~NewWindowPage()
@@ -823,8 +815,41 @@ NewWindowPage::~NewWindowPage()
 
 bool NewWindowPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &request, NavigationType type)
 {
-    //kDebug() << "url:" << request.url() << ",type:" << type << ",frame:" << frame;
+    // kDebug() << "url:" << request.url() << ",type:" << type << ",frame:" << frame;
     if (m_createNewWindow) {
+        const KUrl reqUrl (request.url());
+
+        if (!m_disableJSOpenwindowCheck) {
+            const KParts::HtmlSettingsInterface::JSWindowOpenPolicy policy = WebKitSettings::self()->windowOpenPolicy(reqUrl.host());
+            switch (policy) {
+            case KParts::HtmlSettingsInterface::JSWindowOpenDeny:
+                // TODO: Implement a way for showing the blocked popup dialog.
+                this->deleteLater();
+                return false;
+            case KParts::HtmlSettingsInterface::JSWindowOpenAsk: {
+                const QString message = (reqUrl.isEmpty() ?
+                                          i18n("This site is requesting to open up a popup window.\n"
+                                               "Do you want to allow this?") :
+                                          i18n("<qt>This site is requesting to open a popup window to"
+                                               "<p>%1</p><br/>Do you want to allow this?</qt>",
+                                               KStringHandler::rsqueeze(Qt::escape(reqUrl.prettyUrl()), 100))
+                                        );
+                if (KMessageBox::questionYesNo(view(), message,
+                                               i18n("Javascript Popup Confirmation"),
+                                               KGuiItem(i18n("Allow")),
+                                               KGuiItem(i18n("Do Not Allow"))) == KMessageBox::Yes) {
+                    break;
+                } else {
+                    // TODO: Implement a way for showing the blocked popup dialog.
+                    this->deleteLater();
+                    return false;
+                }
+            }
+            default:
+                break;
+            }
+        }
+
         if (!part() && frame != mainFrame() && type != QWebPage::NavigationTypeOther)
             return false;
 
@@ -846,8 +871,13 @@ bool NewWindowPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequ
         part()->browserExtension()->createNewWindow(KUrl(), uargs, bargs, wargs, &newWindowPart);
         kDebug() << "Created new window" << newWindowPart;
 
-        if (!newWindowPart)
+        if (!newWindowPart) {
             return false;
+        } else if (newWindowPart->widget()->topLevelWidget() != part()->widget()->topLevelWidget()) {
+            KParts::OpenUrlArguments args;
+            args.metaData().insert(QL1S("new-window"), QL1S("true"));
+            newWindowPart->setArguments(args);
+        }
 
         // Get the webview...
         KWebKitPart* webkitPart = qobject_cast<KWebKitPart*>(newWindowPart);
@@ -855,7 +885,7 @@ bool NewWindowPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequ
 
         // If the newly created window is NOT a webkitpart...
         if (!webView) {
-            newWindowPart->openUrl(KUrl(request.url()));
+            newWindowPart->openUrl(reqUrl);
             this->deleteLater();
             return false;
         }
@@ -939,6 +969,12 @@ void NewWindowPage::slotLoadFinished(bool ok)
     WebView* webView = webkitPart ? qobject_cast<WebView*>(webkitPart->view()) : 0;
 
     if (webView) {
+        // if a new window is created, set a new window meta-data flag.
+        if (newWindowPart->widget()->topLevelWidget() != part()->widget()->topLevelWidget()) {
+            KParts::OpenUrlArguments args;
+            args.metaData().insert(QL1S("new-window"), QL1S("true"));
+            newWindowPart->setArguments(args);
+        }
         // Reparent this page to the new webview to prevent memory leaks.
         setParent(webView);
         // Replace the webpage of the new webview with this one. Nice trick...
