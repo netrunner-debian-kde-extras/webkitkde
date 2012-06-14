@@ -2,7 +2,6 @@ webkitkde (1.2+git80f32976-1) UNRELEASED; urgency=low
 
   [Adrien Grellier]
   * New Maintainer (Closes: #624448)
-  * FTBFS with GCC-4.7 (Closes: #667414) 
   * New upstream release 1.2
   * Correct lintian warnings
 
