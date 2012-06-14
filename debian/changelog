@@ -1,15 +1,16 @@
 webkitkde (1.2+git80f32976-1) UNRELEASED; urgency=low
 
-  [Adrien Grellier]
+  [ Adrien Grellier ]
   * New Maintainer (Closes: #624448)
   * New upstream release 1.2
   * Correct lintian warnings
+  * build with hardening flags
 
-  [Raúl Sánchez Siles]
+  [ Raúl Sánchez Siles ]
   * Update packaging to debhelper8.
   * Provide debug package.
 
- -- Raúl Sánchez Siles <rasasi78@gmail.com>  Tue, 22 May 2012 19:52:45 +0200
+ -- Adrien Grellier <adrien.grellier@laposte.net>  Thu, 14 Jun 2012 12:55:41 +0200
 
 webkitkde (1.1.0git80efcf77-1) UNRELEASED; urgency=low
 
