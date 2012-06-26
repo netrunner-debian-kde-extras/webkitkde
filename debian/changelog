@@ -8,6 +8,8 @@ webkitkde (1.3~git20120518.9a111005-1) UNRELEASED; urgency=low
 
   [ Raúl Sánchez Siles ]
   * New upstream pre 1.3.
+    - Fix "konqueror with webkit and rekonq both crashes in acid3 test at
+      about 73/100" (Closes: #629986)
   * Update packaging to debhelper8.
   * Provide debug package.
   * Setting Debian KDE Extras Team as maintainer and adding Adrien and myself
