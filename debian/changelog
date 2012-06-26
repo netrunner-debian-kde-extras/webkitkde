@@ -4,6 +4,7 @@ webkitkde (1.3~git20120518.9a111005-1) UNRELEASED; urgency=low
   * New Maintainer (Closes: #624448)
   * Correct lintian warnings
   * build with hardening flags
+  * Update copyright file.
 
   [ Raúl Sánchez Siles ]
   * New upstream pre 1.3.
