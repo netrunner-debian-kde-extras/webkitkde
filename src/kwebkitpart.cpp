@@ -6,20 +6,18 @@
  * Copyright (C) 2008 Laurent Montel <montel@kde.org>
  * Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or (at your
+ * option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
  *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -53,6 +51,8 @@
 #include <KDE/KAcceleratorManager>
 #include <KDE/KStatusBar>
 #include <KDE/KFileItem>
+#include <KDE/KMessageWidget>
+#include <KDE/KProtocolInfo>
 #include <KParts/StatusBarExtension>
 
 #include <QtCore/QUrl>
@@ -61,6 +61,7 @@
 #include <QtCore/QTextCodec>
 #include <QtGui/QApplication>
 #include <QtGui/QVBoxLayout>
+#include <QtGui/QLayout>
 #include <QtGui/QPrintPreviewDialog>
 #include <QtDBus/QDBusInterface>
 #include <QtWebKit/QWebFrame>
@@ -70,7 +71,7 @@
 #define QL1S(x)  QLatin1String(x)
 #define QL1C(x)  QLatin1Char(x)
 
-static const QUrl sAboutBlankUrl (QL1S("about:blank"));
+K_GLOBAL_STATIC_WITH_ARGS(QUrl, globalBlankUrl, ("about:blank"))
 
 static inline int convertStr2Int(const QString& value)
 {
@@ -84,13 +85,12 @@ static inline int convertStr2Int(const QString& value)
 }
 
 KWebKitPart::KWebKitPart(QWidget *parentWidget, QObject *parent,
-                         const QStringList& args)
+                         const QByteArray& cachedHistory, const QStringList& /*args*/)
             :KParts::ReadOnlyPart(parent),
              m_emitOpenUrlNotify(true),
-             m_pageRestored(false),
              m_hasCachedFormData(false),
-             m_loadStarted(false),
-             m_statusBarWalletLabel(0)
+             m_statusBarWalletLabel(0),
+             m_passwordBar(0)
 {
     KAboutData about = KAboutData("kwebkitpart", 0,
                                   ki18nc("Program Name", "KWebKitPart"),
@@ -119,16 +119,18 @@ KWebKitPart::KWebKitPart(QWidget *parentWidget, QObject *parent,
                                                 .arg(KDE::versionMinor())
                                                 .arg(KDE::versionRelease()));
 
+    setXMLFile(QL1S("kwebkitpart.rc"));
+
+    // Create this KPart's widget
     QWidget *mainWidget = new QWidget (parentWidget);
     mainWidget->setObjectName("kwebkitpart");
-    setWidget(mainWidget);
 
     // Create the WebView...
-    m_webView = new WebView (this, mainWidget);
+    m_webView = new WebView (this, parentWidget);
 
-    // Create the browser extension. The first item of 'args' is used to pass
-    // the session history filename.
-    m_browserExtension = new WebKitBrowserExtension(this, args.at(0));
+    // Create the browser extension.
+    m_browserExtension = new WebKitBrowserExtension(this);
+    m_browserExtension->restoreHistoryFromData(cachedHistory);
 
     // Add status bar extension...
     m_statusBarExtension = new KParts::StatusBarExtension(this);
@@ -140,42 +142,43 @@ KWebKitPart::KWebKitPart(QWidget *parentWidget, QObject *parent,
     // Add text and html extensions...
     new KWebKitTextExtension(this);
     new KWebKitHtmlExtension(this);
-
-    // Create and setup the password bar...
-    m_passwordBar = new KDEPrivate::PasswordBar(mainWidget);
+    new KWebKitScriptableExtension(this);
 
     // Create the search bar...
-    m_searchBar = new KDEPrivate::SearchBar(mainWidget);
-    connect(m_searchBar, SIGNAL(searchTextChanged(QString, bool)),
-            this, SLOT(slotSearchForText(QString, bool)));
+    m_searchBar = new KDEPrivate::SearchBar(parentWidget);
 
-    // Connect the signals/slots from the webview...
+    // Layout the GUI...
+    QVBoxLayout* l = new QVBoxLayout(mainWidget);
+    l->setContentsMargins(0, 0, 0, 0);
+    l->addWidget(m_webView);
+    l->addWidget(m_searchBar);
+    mainWidget->setLayout(l);
+
+    // Set the part's widget
+    setWidget(mainWidget);
+
+    // Set the web view as the the focus object
+    mainWidget->setFocusProxy(m_webView);
+
+
+    // Connect the signals from the search bar
+    connect(m_searchBar, SIGNAL(searchTextChanged(QString,bool)),
+            this, SLOT(slotSearchForText(QString,bool)));
+
+    // Connect the signals from the webview
     connect(m_webView, SIGNAL(titleChanged(QString)),
             this, SIGNAL(setWindowCaption(QString)));
-    connect(m_webView, SIGNAL(loadFinished(bool)),
-            this, SLOT(slotLoadFinished(bool)));
     connect(m_webView, SIGNAL(urlChanged(QUrl)),
             this, SLOT(slotUrlChanged(QUrl)));
     connect(m_webView, SIGNAL(linkMiddleOrCtrlClicked(KUrl)),
             this, SLOT(slotLinkMiddleOrCtrlClicked(KUrl)));
-    connect(m_webView, SIGNAL(selectionClipboardUrlPasted(KUrl, QString)),
-            this, SLOT(slotSelectionClipboardUrlPasted(KUrl, QString)));
+    connect(m_webView, SIGNAL(selectionClipboardUrlPasted(KUrl,QString)),
+            this, SLOT(slotSelectionClipboardUrlPasted(KUrl,QString)));
+    connect(m_webView, SIGNAL(loadFinished(bool)),
+            this, SLOT(slotLoadFinished(bool)));
 
     // Connect the signals from the page...
     connectWebPageSignals(page());
-
-    // Layout the GUI...
-    QVBoxLayout* lay = new QVBoxLayout(mainWidget);
-    lay->setMargin(0);
-    lay->setSpacing(0);
-    lay->addWidget(m_passwordBar);
-    lay->addWidget(m_webView);
-    lay->addWidget(m_searchBar);
-
-    // Set the web view as the the focus object...
-    mainWidget->setFocusProxy(m_webView);
-
-    setXMLFile(QL1S("kwebkitpart.rc"));
 
     // Init the QAction we are going to use...
     initActions();
@@ -186,8 +189,9 @@ KWebKitPart::KWebKitPart(QWidget *parentWidget, QObject *parent,
 
 KWebKitPart::~KWebKitPart()
 {
+    QWebSettings::clearMemoryCaches();
+    kDebug();
 }
-
 
 WebPage* KWebKitPart::page()
 {
@@ -205,9 +209,9 @@ void KWebKitPart::initActions()
     actionCollection()->addAction("saveFrame", action);
     connect(action, SIGNAL(triggered(bool)), m_browserExtension, SLOT(slotSaveFrame()));
 
-    action = new KAction(KIcon("document-print-frame"), i18n("Print Frame..."), this);
-    actionCollection()->addAction("printFrame", action);
-    connect(action, SIGNAL(triggered(bool)), m_browserExtension, SLOT(printFrame()));
+    action = new KAction(KIcon("document-print-preview"), i18n("Print Preview"), this);
+    actionCollection()->addAction("printPreview", action);
+    connect(action, SIGNAL(triggered(bool)), m_browserExtension, SLOT(slotPrintPreview()));
 
     action = new KAction(KIcon("zoom-in"), i18nc("zoom in action", "Zoom In"), this);
     actionCollection()->addAction("zoomIn", action);
@@ -260,6 +264,27 @@ void KWebKitPart::initActions()
                                            m_searchBar, SLOT(findPrevious()));
 }
 
+void KWebKitPart::updateActions()
+{
+    m_browserExtension->updateActions();
+
+    QAction* action = actionCollection()->action(QL1S("saveDocument"));
+    if (action) {
+        const QString protocol (url().protocol());
+        action->setEnabled(protocol != QL1S("about") && protocol != QL1S("error"));
+    }
+
+    action = actionCollection()->action(QL1S("printPreview"));
+    if (action) {
+        action->setEnabled(m_browserExtension->isActionEnabled("print"));
+    }
+
+    action = actionCollection()->action(QL1S("saveFrame"));
+    if (action) {
+        action->setEnabled((view()->page()->currentFrame() != view()->page()->mainFrame()));
+    }
+}
+
 void KWebKitPart::connectWebPageSignals(WebPage* page)
 {
     if (!page)
@@ -269,21 +294,20 @@ void KWebKitPart::connectWebPageSignals(WebPage* page)
             this, SLOT(slotLoadStarted()));
     connect(page, SIGNAL(loadAborted(KUrl)),
             this, SLOT(slotLoadAborted(KUrl)));
-    connect(page, SIGNAL(linkHovered(QString, QString, QString)),
-            this, SLOT(slotLinkHovered(QString, QString, QString)));
-    connect(page, SIGNAL(saveFrameStateRequested(QWebFrame *, QWebHistoryItem *)),
-            this, SLOT(slotSaveFrameState(QWebFrame *, QWebHistoryItem *)));
-    connect(page, SIGNAL(restoreFrameStateRequested(QWebFrame *)),
-            this, SLOT(slotRestoreFrameState(QWebFrame *)));
+    connect(page, SIGNAL(linkHovered(QString,QString,QString)),
+            this, SLOT(slotLinkHovered(QString,QString,QString)));
+    connect(page, SIGNAL(saveFrameStateRequested(QWebFrame*,QWebHistoryItem*)),
+            this, SLOT(slotSaveFrameState(QWebFrame*,QWebHistoryItem*)));
+    connect(page, SIGNAL(restoreFrameStateRequested(QWebFrame*)),
+            this, SLOT(slotRestoreFrameState(QWebFrame*)));
     connect(page, SIGNAL(statusBarMessage(QString)),
             this, SLOT(slotSetStatusBarText(QString)));
     connect(page, SIGNAL(windowCloseRequested()),
             this, SLOT(slotWindowCloseRequested()));
     connect(page, SIGNAL(printRequested(QWebFrame*)),
-            this, SLOT(slotPrintRequested(QWebFrame*)));
-
-    connect(page, SIGNAL(loadStarted()), m_searchBar, SLOT(clear()));
-    connect(page, SIGNAL(loadStarted()), m_searchBar, SLOT(hide()));
+            m_browserExtension, SLOT(slotPrintRequested(QWebFrame*)));
+    connect(page, SIGNAL(frameCreated(QWebFrame*)),
+            this, SLOT(slotFrameCreated(QWebFrame*)));
 
     connect(m_webView, SIGNAL(linkShiftClicked(KUrl)),
             page, SLOT(downloadUrl(KUrl)));
@@ -294,30 +318,48 @@ void KWebKitPart::connectWebPageSignals(WebPage* page)
             m_browserExtension, SLOT(updateEditActions()));
     connect(m_browserExtension, SIGNAL(saveUrl(KUrl)),
             page, SLOT(downloadUrl(KUrl)));
+    connect(m_browserExtension, SIGNAL(openUrlNotify()),
+            m_browserExtension, SLOT(slotSaveHistory()));
+
+    connect(page->mainFrame(), SIGNAL(loadFinished(bool)),
+            this, SLOT(slotMainFrameLoadFinished(bool)));
+
 
     KWebWallet *wallet = page->wallet();
     if (wallet) {
-        connect(wallet, SIGNAL(saveFormDataRequested(QString, QUrl)),
-                m_passwordBar, SLOT(onSaveFormData(QString, QUrl)));
-        connect(m_passwordBar, SIGNAL(saveFormDataAccepted(QString)),
-                wallet, SLOT(acceptSaveFormDataRequest(QString)));
-        connect(m_passwordBar, SIGNAL(saveFormDataRejected(QString)),
-                wallet, SLOT(rejectSaveFormDataRequest(QString)));
+        connect(wallet, SIGNAL(saveFormDataRequested(QString,QUrl)),
+                this, SLOT(slotSaveFormDataRequested(QString,QUrl)));
+        connect(wallet, SIGNAL(fillFormRequestCompleted(bool)),
+                this, SLOT(slotFillFormRequestCompleted(bool)));
         connect(wallet, SIGNAL(walletClosed()), this, SLOT(slotWalletClosed()));
     }
 }
 
-bool KWebKitPart::openUrl(const KUrl &u)
+bool KWebKitPart::openUrl(const KUrl &_u)
 {
+    KUrl u (_u);
+
     kDebug() << u;
 
     // Ignore empty requests...
     if (u.isEmpty())
         return false;
 
-    // Do not update history when url is typed in since konqueror
-    // automatically does that itself.
+    // If the URL given is a supported local protocol, e.g. "bookmark" but lacks
+    // a path component, we set the path to "/" here so that the security context
+    // will properly allow access to local resources.
+    if (u.host().isEmpty() && u.path().isEmpty()
+        && KProtocolInfo::protocolClass(u.protocol()) == QL1S(":local")) {
+        u.setPath(QL1S("/"));
+    }
+
+    // Do not emit update history when url is typed in since the embedding part
+    // should handle that automatically itself. At least Konqueror does that.
     m_emitOpenUrlNotify = false;
+
+    // Pointer to the page object...
+    WebPage* p = page();
+    Q_ASSERT(p);
 
     // Handle error conditions...
     if (u.protocol().compare(QL1S("error"), Qt::CaseInsensitive) == 0 && u.hasSubUrl()) {
@@ -340,8 +382,8 @@ bool KWebKitPart::openUrl(const KUrl &u)
             urls.pop_front();
             KUrl reqUrl = KUrl::join( urls );
             emit m_browserExtension->setLocationBarUrl(reqUrl.prettyUrl());
-            if (page()) {
-                m_webView->setHtml(page()->errorPage(error, errorText, reqUrl));
+            if (p) {
+                m_webView->setHtml(p->errorPage(error, errorText, reqUrl));
                 return true;
             }
         }
@@ -352,51 +394,14 @@ bool KWebKitPart::openUrl(const KUrl &u)
     KParts::BrowserArguments bargs (m_browserExtension->browserArguments());
     KParts::OpenUrlArguments args (arguments());
 
-    if ((sAboutBlankUrl != u) && page()) {
-        // Check if this is a restore state request, i.e. a history navigation
-        // or a session restore. If it is, fulfill the request using QWebHistory.
-        if (args.metaData().contains(QL1S("kwebkitpart-restore-state"))) {
-            m_pageRestored = true;
-            const int historyCount = page()->history()->count();
-            const int historyIndex = args.metaData().take(QL1S("kwebkitpart-restore-state")).toInt();
-            if (historyCount > 0 && historyIndex > -1 && historyIndex < historyCount ) {
-                QWebHistoryItem historyItem = page()->history()->itemAt(historyIndex);
-                const bool restoreScrollPos = args.metaData().contains(QL1S("kwebkitpart-restore-scrollx"));
-                if (restoreScrollPos) {
-                    QMap<QString, QVariant> data;
-                    data.insert(QL1S("scrollx"), args.metaData().take(QL1S("kwebkitpart-restore-scrollx")).toInt());
-                    data.insert(QL1S("scrolly"), args.metaData().take(QL1S("kwebkitpart-restore-scrolly")).toInt());
-                    historyItem.setUserData(data);
-                }
-
-                if (historyItem.isValid()) {
-                    setUrl(historyItem.url());
-                    // Set any cached ssl information...
-                    if (historyItem.userData().isValid()) {
-                        WebSslInfo sslInfo;
-                        sslInfo.restoreFrom(historyItem.userData());
-                        page()->setSslInfo(sslInfo);
-                    }
-                    page()->history()->goToItem(historyItem);
-                    // Update the part's OpenUrlArguments after removing all of the
-                    // 'kwebkitpart-restore-x' metadata entries...
-                    setArguments(args);
-                    return true;
-                }
-            }
-        }
-
+    if (u != *globalBlankUrl) {
         // Get the SSL information sent, if any...
         if (args.metaData().contains(QL1S("ssl_in_use"))) {
             WebSslInfo sslInfo;
             sslInfo.restoreFrom(KIO::MetaData(args.metaData()).toVariant());
             sslInfo.setUrl(u);
-            page()->setSslInfo(sslInfo);
+            p->setSslInfo(sslInfo);
         }
-
-        // Update the part's OpenUrlArguments after removing all of the
-        // 'kwebkitpart-restore-x' metadata entries...
-        setArguments(args);
     }
 
     // Set URL in KParts before emitting started; konq plugins rely on that.
@@ -426,8 +431,9 @@ bool KWebKitPart::isModified() const
 
 void KWebKitPart::guiActivateEvent(KParts::GUIActivateEvent *event)
 {
-    Q_UNUSED(event);
-    // just overwrite, but do nothing for the moment
+    if (event && event->activated() && m_webView) {
+        emit setWindowCaption(m_webView->title());
+    }
 }
 
 bool KWebKitPart::openFile()
@@ -441,107 +447,110 @@ bool KWebKitPart::openFile()
 
 void KWebKitPart::slotLoadStarted()
 {
-    m_loadStarted = true;
+    // kDebug() << "main frame:" << page()->mainFrame() << "current frame:" << page()->currentFrame();
     emit started(0);
-    slotWalletClosed();
+    updateActions();
+}
+
+void KWebKitPart::slotFrameLoadFinished(bool ok)
+{
+    QWebFrame* frame = qobject_cast<QWebFrame*>(sender());
+
+    if (ok) {
+        const QUrl currentUrl (frame->baseUrl().resolved(frame->url()));
+        // kDebug() << "mainframe:" << m_webView->page()->mainFrame() << "frame:" << sender();
+        // kDebug() << "url:" << frame->url() << "base url:" << frame->baseUrl() << "request url:" << frame->requestedUrl();
+        if (currentUrl != *globalBlankUrl) {
+            m_hasCachedFormData = false;
+
+            if (WebKitSettings::self()->isNonPasswordStorableSite(currentUrl.host())) {
+                addWalletStatusBarIcon();
+            } else {
+                // Attempt to fill the web form...
+                KWebWallet *webWallet = page() ? page()->wallet() : 0;
+                // kDebug() << webWallet << frame;
+                if (webWallet) {
+                    webWallet->fillFormData(frame, false);
+                }
+            }
+        }
+    }
+}
+
+void KWebKitPart::slotMainFrameLoadFinished (bool ok)
+{
+    if (!ok)
+        return;
+
+    if (!m_emitOpenUrlNotify) {
+        m_browserExtension->slotSaveHistory(); // Cache contents of QWebHistory
+        m_emitOpenUrlNotify = true; // Save history once page loading is done.
+    }
+
+    // If the document contains no <title> tag, then set it to the current url.
+    if (m_webView->title().trimmed().isEmpty()) {
+        // If the document title is empty, then set it to the current url
+        const QUrl url (m_webView->url());
+        const QString caption (url.toString((QUrl::RemoveQuery|QUrl::RemoveFragment)));
+        emit setWindowCaption(caption);
+
+        // The urlChanged signal is emitted if and only if the main frame
+        // receives the title of the page so we manually invoke the slot as a
+        // work around here for pages that do not contain it, such as text
+        // documents...
+        slotUrlChanged(url);
+    }
+
+   QWebFrame* frame = qobject_cast<QWebFrame*>(sender());
+
+    if (!frame || frame->url() == *globalBlankUrl)
+        return;
+
+    // Set the favicon specified through the <link> tag...
+    if (WebKitSettings::self()->favIconsEnabled()
+        && !frame->page()->settings()->testAttribute(QWebSettings::PrivateBrowsingEnabled)) {
+        const QWebElement element = frame->findFirstElement(QL1S("head>link[rel=icon], "
+                                                                 "head>link[rel=\"shortcut icon\"]"));
+        KUrl shortcutIconUrl;
+        if (element.isNull()) {
+            shortcutIconUrl = frame->baseUrl();
+            QString urlPath = shortcutIconUrl.path();
+            const int index = urlPath.indexOf(QL1C('/'));
+            if (index > -1)
+              urlPath.truncate(index);
+            urlPath += QL1S("/favicon.ico");
+            shortcutIconUrl.setPath(urlPath);
+        } else {
+            shortcutIconUrl = KUrl (frame->baseUrl(), element.attribute("href"));
+        }
+
+        //kDebug() << "setting favicon to" << shortcutIconUrl;
+        m_browserExtension->setIconUrl(shortcutIconUrl);
+    }
+
+    slotFrameLoadFinished(ok);
 }
 
 void KWebKitPart::slotLoadFinished(bool ok)
 {
-    if (!m_loadStarted)
-        return;
+    updateActions();
 
-    m_loadStarted = false;
-    m_emitOpenUrlNotify = true;
-
-    if (ok) {
-        if (m_webView->title().trimmed().isEmpty()) {
-            // If the document title is empty, then set it to the current url
-            const QString caption = m_webView->url().toString((QUrl::RemoveQuery|QUrl::RemoveFragment));
-            emit setWindowCaption(caption);
-
-            // The urlChanged signal is emitted if and only if the main frame
-            // receives the title of the page so we manually invoke the slot as
-            // a work around here for pages that do not contain it, such as
-            // text documents...
-            slotUrlChanged(m_webView->url());
-        }
-
-        const QUrl mainUrl = m_webView->url();
-        if (mainUrl != sAboutBlankUrl && page()) {
-            // Fill form data from wallet...
-            KWebWallet *webWallet = page()->wallet();
-            if (webWallet) {
-                webWallet->fillFormData(page()->mainFrame());
-                KWebWallet::WebFormList list = webWallet->formsWithCachedData(page()->mainFrame());
-                if (!list.isEmpty()) {
-                    if (!m_statusBarWalletLabel) {
-                        m_statusBarWalletLabel = new KUrlLabel(m_statusBarExtension->statusBar());
-                        m_statusBarWalletLabel->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Minimum));
-                        m_statusBarWalletLabel->setUseCursor(false);
-                        m_statusBarWalletLabel->setPixmap(SmallIcon("wallet-open"));
-                        connect(m_statusBarWalletLabel, SIGNAL(leftClickedUrl()), SLOT(slotLaunchWalletManager()));
-                        connect(m_statusBarWalletLabel, SIGNAL(rightClickedUrl()), SLOT(slotShowWalletMenu()));
-                    }
-
-                    m_statusBarExtension->addStatusBarItem(m_statusBarWalletLabel, 0, false);
-                    m_hasCachedFormData = true;
-                }
-            }
-
-            // Set the favicon specified through the <link> tag...
-            if (WebKitSettings::self()->favIconsEnabled() &&
-                mainUrl.scheme().startsWith(QL1S("http"), Qt::CaseInsensitive)) {
-                const QWebElement element = page()->mainFrame()->findFirstElement(QL1S("head>link[rel=icon], "
-                                                                                        "head>link[rel=\"shortcut icon\"]"));
-                KUrl shortcutIconUrl;
-                if (element.isNull()) {
-                    shortcutIconUrl = page()->mainFrame()->baseUrl();
-                    QString urlPath = shortcutIconUrl.path();
-                    const int index = urlPath.indexOf(QL1C('/'));
-                    if (index > -1)
-                      urlPath.truncate(index);
-                    urlPath += QL1S("/favicon.ico");
-                    shortcutIconUrl.setPath(urlPath);
-                } else {
-                    shortcutIconUrl = KUrl (page()->mainFrame()->baseUrl(), element.attribute("href"));
-                }
-
-                kDebug() << "setting favicon to" << shortcutIconUrl;
-                m_browserExtension->setIconUrl(shortcutIconUrl);
-            }
-        }
-    }
-
-    // Set page restored to false, if the page was restored...
-    if (m_pageRestored) {
-        m_pageRestored = false;
-        // Restore the scroll postions if present...
-        KParts::OpenUrlArguments args = arguments();
-        if (args.metaData().contains(QL1S("kwebkitpart-restore-scrollx"))) {
-            const int scrollPosX = args.metaData().take(QL1S("kwebkitpart-restore-scrollx")).toInt();
-            const int scrollPosY = args.metaData().take(QL1S("kwebkitpart-restore-scrolly")).toInt();
-            if (page()) {
-                page()->mainFrame()->setScrollPosition(QPoint(scrollPosX, scrollPosY));
-                setArguments(args);
-            }
-        }
-    }
-
+    bool pending = false;
     /*
       NOTE: Support for stopping meta data redirects is implemented in QtWebKit
       2.0 (Qt 4.7) or greater. See https://bugs.webkit.org/show_bug.cgi?id=29899.
     */
-    bool pending = false;
 #if QT_VERSION >= 0x040700
-    if (page() && page()->mainFrame()->findAllElements(QL1S("head>meta[http-equiv=refresh]")).count()) {
-        if (WebKitSettings::self()->autoPageRefresh())
-            pending = true;
-        else
-            page()->triggerAction(QWebPage::StopScheduledPageRefresh);
+    QWebFrame* frame = page() ? page()->currentFrame() : 0;
+    if (ok && !frame->findFirstElement(QL1S("head>meta[http-equiv=refresh]")).isNull()) {
+        if (WebKitSettings::self()->autoPageRefresh()) {
+            pending = false;
+        } else {
+            frame->page()->triggerAction(QWebPage::StopScheduledPageRefresh);
+        }
     }
 #endif
-    emit completed((ok && pending));
+    emit completed ((ok && pending));
 }
 
 void KWebKitPart::slotLoadAborted(const KUrl & url)
@@ -567,10 +576,10 @@ void KWebKitPart::slotUrlChanged(const QUrl& url)
     setUrl(u);
 
     // Do not update the location bar with about:blank
-    if (url == sAboutBlankUrl)
+    if (url == *globalBlankUrl)
         return;
 
-    kDebug() << "Setting location bar to" << u.prettyUrl();
+    //kDebug() << "Setting location bar to" << u.prettyUrl();
     emit m_browserExtension->setLocationBarUrl(u.prettyUrl());
 }
 
@@ -602,47 +611,59 @@ void KWebKitPart::slotShowSecurity()
 
 void KWebKitPart::slotSaveFrameState(QWebFrame *frame, QWebHistoryItem *item)
 {
-    if (!page() || frame != page()->mainFrame())
+    if (!frame || !item) {
         return;
+    }
 
-    //kDebug() << "Update history ?" << m_emitOpenUrlNotify;
-    if (m_emitOpenUrlNotify)
+    if (!frame->parentFrame()) {
+        slotWalletClosed();
+    }
+
+    // If "NoEmitOpenUrlNotification" property is set to true, do not
+    // emit the open url notification.
+    if (property("NoEmitOpenUrlNotification").toBool()) {
+        m_emitOpenUrlNotify = false;
+        setProperty("NoEmitOpenUrlNotification", QVariant());
+    }
+
+    if (m_emitOpenUrlNotify && !frame->parentFrame()) {
+        // kDebug() << "***** EMITTING openUrlNotify" << item->url();
         emit m_browserExtension->openUrlNotify();
+    }
 
-    // Save the SSL info as the history item meta-data...
-    if (!item)
-        return;
-
-    QMap<QString, QVariant> data;
-    const QVariant v = item->userData();
-
-    if (v.isValid() && v.type() == QVariant::Map)
-        data = v.toMap();
-
-    if (page()->sslInfo().saveTo(data))
-        item->setUserData(data);
+    // For some reason, QtWebKit does not restore scroll position when
+    // QWebHistory is restored from persistent storage. Therefore, we
+    // preserve that information and restore it as needed. See
+    // slotRestoreFrameState.
+    const QPoint scrollPos (frame->scrollPosition());
+    if (!scrollPos.isNull()) {
+        item->setUserData(scrollPos);
+    }
 }
 
 void KWebKitPart::slotRestoreFrameState(QWebFrame *frame)
 {
-    //kDebug() << "Restore state for" << frame;
-    if (!page() || frame != page()->mainFrame())
+    if (!frame)
         return;
 
-    m_emitOpenUrlNotify = true;
+    QWebPage* page = (frame ? frame->page() : 0);
+    QWebHistory* history = (page ? page->history() : 0);
 
-    if (!m_pageRestored)
+    // No history item...
+    if (!history || history->count() < 1)
         return;
 
-    const QWebHistoryItem item = frame->page()->history()->currentItem();
-    QVariant v = item.userData();
-    if (!v.isValid() || v.type() != QVariant::Map)
-        return;
+    QWebHistoryItem currentHistoryItem (history->currentItem());
 
-    QMap<QString, QVariant> data = v.toMap();
-    if (data.contains(QL1S("scrollx")) && data.contains(QL1S("scrolly")))
-        frame->setScrollPosition(QPoint(data.value(QL1S("scrollx")).toInt(),
-                                        data.value(QL1S("scrolly")).toInt()));
+    // Update the scroll position if needed. See comment in slotSaveFrameState above.
+    if (frame->baseUrl().resolved(frame->url()) == currentHistoryItem.url()) {
+        const QPoint currentPos (frame->scrollPosition());
+        const QPoint desiredPos (currentHistoryItem.userData().toPoint());
+        // kDebug() << frame << "scroll position: current=" << currentPos << ", desired=" << desiredPos;
+        if (currentPos.isNull() && !desiredPos.isNull()) {
+            frame->setScrollPosition(desiredPos);
+        }
+    }
 }
 
 void KWebKitPart::slotLinkHovered(const QString& _link, const QString& /*title*/, const QString& /*content*/)
@@ -668,9 +689,11 @@ void KWebKitPart::slotLinkHovered(const QString& _link, const QString& /*title*/
               linkUrl = QUrl(scheme + '?' + linkUrl.path());
 
             QMap<QString, QStringList> fields;
-            QPair<QString, QString> queryItem;
+            QList<QPair<QString, QString> > queryItems = linkUrl.queryItems();
+            const int count = queryItems.count();
 
-            Q_FOREACH (queryItem, linkUrl.queryItems()) {
+            for(int i = 0; i < count; ++i) {
+                const QPair<QString, QString> queryItem (queryItems.at(i));
                 //kDebug() << "query: " << queryItem.first << queryItem.second;
                 if (queryItem.first.contains(QL1C('@')) && queryItem.second.isEmpty())
                     fields["to"] << queryItem.first;
@@ -693,23 +716,21 @@ void KWebKitPart::slotLinkHovered(const QString& _link, const QString& /*title*/
             if (fields.contains(QL1S("subject")))
                 message += i18nc("status bar text when hovering email links; looks like \"Email: xy@kde.org - CC: z@kde.org -BCC: x@kde.org - Subject: Hi translator\"", " - Subject: ") + fields.value(QL1S("subject")).join(QL1S(" "));
         } else if (scheme == QL1S("javascript")) {
-            message = KStringHandler::rsqueeze(link, 80);
+            message = KStringHandler::rsqueeze(link, 150);
             if (link.startsWith(QL1S("javascript:window.open")))
                 message += i18n(" (In new window)");
         } else {
             message = link;
-            if (page()) {
-                QWebFrame* frame = page()->currentFrame();
-                if (frame) {
-                    const QString query = QL1S("a[href*=\"") + link + QL1S("\"]");
-                    const QWebElement element = frame->findFirstElement(query);
-                    const QString target = element.attribute(QL1S("target"));
-                    if (target.compare(QL1S("_blank"), Qt::CaseInsensitive) == 0 ||
-                        target.compare(QL1S("top"), Qt::CaseInsensitive) == 0) {
-                        message += i18n(" (In new window)");
-                    } else if (target.compare(QL1S("_parent"), Qt::CaseInsensitive) == 0) {
-                        message += i18n(" (In parent frame)");
-                    }
+            QWebFrame* frame = page() ? page()->currentFrame() : 0;
+            if (frame) {
+                QWebHitTestResult result = frame->hitTestContent(page()->view()->mapFromGlobal(QCursor::pos()));
+                const QWebElement element (result.linkElement());
+                const QString target (element.attribute(QL1S("target")));
+                if (target.compare(QL1S("_blank"), Qt::CaseInsensitive) == 0 ||
+                    target.compare(QL1S("top"), Qt::CaseInsensitive) == 0) {
+                    message += i18n(" (In new window)");
+                } else if (target.compare(QL1S("_parent"), Qt::CaseInsensitive) == 0) {
+                    message += i18n(" (In parent frame)");
                 }
             }
             KFileItem item (linkUrl, QString(), KFileItem::Unknown);
@@ -783,7 +804,7 @@ void KWebKitPart::slotShowWalletMenu()
     if (m_webView && WebKitSettings::self()->isNonPasswordStorableSite(m_webView->url().host()))
       menu->addAction(i18n("&Allow password caching for this site"), this, SLOT(slotDeleteNonPasswordStorableSite()));
 
-    if (page() && m_hasCachedFormData)
+    if (m_hasCachedFormData)
       menu->addAction(i18n("Remove all cached passwords for this site"), this, SLOT(slotRemoveCachedPasswords()));
 
     menu->addSeparator();
@@ -827,7 +848,7 @@ void KWebKitPart::slotSetTextEncoding(QTextCodec * codec)
     if (!localSettings)
         return;
 
-    kDebug() << codec->name();
+    // kDebug() << codec->name();
 
     localSettings->setDefaultTextEncoding(codec->name());
     openUrl(url());
@@ -835,8 +856,8 @@ void KWebKitPart::slotSetTextEncoding(QTextCodec * codec)
 
 void KWebKitPart::slotSetStatusBarText(const QString& text)
 {
-    const QString host = page() ? page()->mainFrame()->url().host() : QString();
-    if (WebKitSettings::self()->windowStatusPolicy(host) == WebKitSettings::KJSWindowStatusAllow)
+    const QString host (page() ? page()->currentFrame()->url().host() : QString());
+    if (WebKitSettings::self()->windowStatusPolicy(host) == KParts::HtmlSettingsInterface::JSWindowStatusAllow)
         emit setStatusBarText(text);
 }
 
@@ -853,13 +874,83 @@ void KWebKitPart::slotWindowCloseRequested()
     this->deleteLater();
 }
 
-void KWebKitPart::slotPrintRequested(QWebFrame* frame)
+void KWebKitPart::slotSaveFormDataRequested (const QString& key, const QUrl& url)
 {
-    if (!frame)
+    if (WebKitSettings::self()->isNonPasswordStorableSite(url.host()))
         return;
 
-    QPrintPreviewDialog dlg(m_webView);
-    connect(&dlg, SIGNAL(paintRequested(QPrinter *)),
-            frame, SLOT(print(QPrinter *)));
-    dlg.exec();
+    if (!WebKitSettings::self()->askToSaveSitePassword())
+        return;
+
+    if (m_passwordBar && m_passwordBar->isVisible())
+        return;
+
+    if (!m_passwordBar) {
+        m_passwordBar = new KDEPrivate::PasswordBar(widget());
+        KWebWallet* wallet = page()->wallet();
+        if (!wallet) {
+            kWarning() << "No wallet instance found! This should never happen!";
+            return;
+        }
+        connect(m_passwordBar, SIGNAL(saveFormDataAccepted(QString)),
+                wallet, SLOT(acceptSaveFormDataRequest(QString)));
+        connect(m_passwordBar, SIGNAL(saveFormDataRejected(QString)),
+                wallet, SLOT(rejectSaveFormDataRequest(QString)));
+        connect(m_passwordBar, SIGNAL(done()),
+                this, SLOT(slotSaveFormDataDone()));
+    }
+
+    Q_ASSERT(m_passwordBar);
+
+    m_passwordBar->setUrl(url);
+    m_passwordBar->setRequestKey(key);
+    m_passwordBar->setText(i18n("<html>Do you want %1 to remember the login "
+                                "information for <b>%2</b>?</html>",
+                                QCoreApplication::applicationName(),
+                                url.host()));
+
+    QVBoxLayout* lay = qobject_cast<QVBoxLayout*>(widget()->layout());
+    if (lay)
+        lay->insertWidget(0, m_passwordBar);
+
+    m_passwordBar->animatedShow();
+}
+
+void KWebKitPart::slotSaveFormDataDone()
+{
+    if (!m_passwordBar)
+        return;
+
+    QVBoxLayout* lay = qobject_cast<QVBoxLayout*>(widget()->layout());
+    if (lay)
+        lay->removeWidget(m_passwordBar);
+}
+
+void KWebKitPart::addWalletStatusBarIcon ()
+{
+    if (m_statusBarWalletLabel) {
+        m_statusBarExtension->removeStatusBarItem(m_statusBarWalletLabel);
+    } else {
+        m_statusBarWalletLabel = new KUrlLabel(m_statusBarExtension->statusBar());
+        m_statusBarWalletLabel->setSizePolicy(QSizePolicy(QSizePolicy::Fixed, QSizePolicy::Minimum));
+        m_statusBarWalletLabel->setUseCursor(false);
+        m_statusBarWalletLabel->setPixmap(SmallIcon("wallet-open"));
+        connect(m_statusBarWalletLabel, SIGNAL(leftClickedUrl()), SLOT(slotLaunchWalletManager()));
+        connect(m_statusBarWalletLabel, SIGNAL(rightClickedUrl()), SLOT(slotShowWalletMenu()));
+    }
+    m_statusBarExtension->addStatusBarItem(m_statusBarWalletLabel, 0, false);
+}
+
+void KWebKitPart::slotFillFormRequestCompleted (bool ok)
+{
+    if ((m_hasCachedFormData = ok))
+        addWalletStatusBarIcon();
+}
+
+void KWebKitPart::slotFrameCreated (QWebFrame* frame)
+{
+    if (frame == page()->mainFrame())
+        return;
+
+    connect(frame, SIGNAL(loadFinished(bool)), this, SLOT(slotFrameLoadFinished(bool)), Qt::UniqueConnection);
 }

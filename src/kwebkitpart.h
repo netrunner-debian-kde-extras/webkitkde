@@ -5,20 +5,18 @@
  * Copyright (C) 2008 Urs Wolfer <uwolfer @ kde.org>
  * Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or (at your
+ * option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
  *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 #ifndef KWEBKITPART_H
@@ -59,8 +57,9 @@ class KWebKitPart : public KParts::ReadOnlyPart
     Q_OBJECT
     Q_PROPERTY( bool modified READ isModified )
 public:
-    explicit KWebKitPart(QWidget *parentWidget = 0, QObject *parent = 0,
-                         const QStringList &/*args*/ = QStringList());
+    explicit KWebKitPart(QWidget* parentWidget = 0, QObject* parent = 0,
+                         const QByteArray& cachedHistory = QByteArray(),
+                         const QStringList& = QStringList());
     ~KWebKitPart();
 
     /**
@@ -116,8 +115,10 @@ private Q_SLOTS:
     void slotShowSecurity();
     void slotShowSearchBar();
     void slotLoadStarted();
-    void slotLoadFinished(bool);
     void slotLoadAborted(const KUrl &);
+    void slotLoadFinished(bool);
+    void slotFrameLoadFinished(bool);
+    void slotMainFrameLoadFinished(bool);
 
     void slotSearchForText(const QString &text, bool backward);
     void slotLinkHovered(const QString &, const QString&, const QString &);
@@ -135,16 +136,19 @@ private Q_SLOTS:
     void slotSetTextEncoding(QTextCodec*);
     void slotSetStatusBarText(const QString& text);
     void slotWindowCloseRequested();
-    void slotPrintRequested(QWebFrame*);
+    void slotSaveFormDataRequested(const QString &, const QUrl &);
+    void slotSaveFormDataDone();
+    void slotFillFormRequestCompleted(bool);
+    void slotFrameCreated(QWebFrame*);
 
 private:
     WebPage* page();
     void initActions();
+    void updateActions();
+    void addWalletStatusBarIcon();
 
     bool m_emitOpenUrlNotify;
-    bool m_pageRestored;
     bool m_hasCachedFormData;
-    bool m_loadStarted;
     KUrlLabel* m_statusBarWalletLabel;
     KDEPrivate::SearchBar* m_searchBar;
     KDEPrivate::PasswordBar* m_passwordBar;

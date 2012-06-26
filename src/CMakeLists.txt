@@ -10,15 +10,15 @@ set(kwebkit_LIB_SRCS
     websslinfo.cpp
     webhistoryinterface.cpp
     networkaccessmanager.cpp
+    webpluginfactory.cpp
     settings/webkitsettings.cpp
-    settings/khtml_filter.cpp
+    settings/webkit_filter.cpp
     ui/searchbar.cpp
     ui/passwordbar.cpp
 )
 
 kde4_add_ui_files(kwebkit_LIB_SRCS
                   ui/searchbar.ui
-                  ui/passwordbar.ui
 )
 
 ########################### kwebkitpart #############################

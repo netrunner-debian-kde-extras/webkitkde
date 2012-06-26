@@ -3,20 +3,18 @@
  *
  * Copyright (C) 2009 Dawit Alemayehu <adawit@kde.org>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or (at your
+ * option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
  *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -26,37 +24,40 @@
 #include <KDE/KParts/BrowserExtension>
 #include <KDE/KParts/TextExtension>
 #include <KDE/KParts/HtmlExtension>
+#include <kparts/scriptableextension.h>
 
 class KUrl;
 class KWebKitPart;
 class WebView;
 class KSaveFile;
+class QWebFrame;
 
 class WebKitBrowserExtension : public KParts::BrowserExtension
 {
     Q_OBJECT
 
 public:
-    WebKitBrowserExtension(KWebKitPart *parent,
-                           const QString& historyFileName);
+    WebKitBrowserExtension(KWebKitPart *parent);
     ~WebKitBrowserExtension();
 
     virtual int xOffset();
     virtual int yOffset();
     virtual void saveState(QDataStream &);
     virtual void restoreState(QDataStream &);
+    void restoreHistoryFromData(const QByteArray& data);
 
 Q_SIGNALS:
     void saveUrl(const KUrl &);
+    void saveHistory(QObject*, const QByteArray&);
 
 public Q_SLOTS:
     void cut();
     void copy();
     void paste();
+    void print();
+
     void slotSaveDocument();
     void slotSaveFrame();
-    void print();
-    void printFrame();
     void searchProvider();
     void reparseConfiguration();
     void disableScrolling();
@@ -82,24 +83,42 @@ public Q_SLOTS:
     void slotBlockHost();
 
     void slotCopyLinkURL();
+    void slotCopyLinkText();
     void slotSaveLinkAs();
 
     void slotViewDocumentSource();
     void slotViewFrameSource();
 
     void updateEditActions();
+    void updateActions();
+
     void slotPlayMedia();
     void slotMuteMedia();
     void slotLoopMedia();
     void slotShowMediaControls();
     void slotSaveMedia();
     void slotCopyMedia();
+    void slotTextDirectionChanged();
+    void slotCheckSpelling();
+    void slotSpellCheckSelection();
+    void slotSpellCheckDone(const QString&);
+    void spellCheckerCorrected(const QString&, int, const QString&);
+    void spellCheckerMisspelling(const QString&, int);
+    void slotSaveHistory();
+    void slotPrintRequested(QWebFrame*);
+    void slotPrintPreview();
+
+    void slotOpenSelection();
+    void slotLinkInTop();
 
 private:
     WebView* view();
     QWeakPointer<KWebKitPart> m_part;
     QWeakPointer<WebView> m_view;
-    KSaveFile* m_historyContentSaver;
+    quint32 m_spellTextSelectionStart;
+    quint32 m_spellTextSelectionEnd;
+    quint32 m_currentHistoryItemIndex;
+    QByteArray m_historyData;
 };
 
 /**
@@ -116,6 +135,7 @@ public:
     virtual QString selectedText(Format format) const;
     virtual QString completeText(Format format) const;
 
+private:
     KWebKitPart* part() const;
 };
 
@@ -124,10 +144,12 @@ public:
  * Implements the HtmlExtension interface
  */
 class KWebKitHtmlExtension : public KParts::HtmlExtension,
-                             public KParts::SelectorInterface
+                             public KParts::SelectorInterface,
+                             public KParts::HtmlSettingsInterface
 {
     Q_OBJECT
     Q_INTERFACES(KParts::SelectorInterface)
+    Q_INTERFACES(KParts::HtmlSettingsInterface)
 
 public:
     KWebKitHtmlExtension(KWebKitPart* part);
@@ -141,7 +163,39 @@ public:
     virtual Element querySelector(const QString& query, KParts::SelectorInterface::QueryMethod method) const;
     virtual QList<Element> querySelectorAll(const QString& query, KParts::SelectorInterface::QueryMethod method) const;
 
+    // HtmlSettingsInterface
+    virtual QVariant htmlSettingsProperty(HtmlSettingsType type) const;
+    virtual bool setHtmlSettingsProperty(HtmlSettingsType type, const QVariant& value);
+
+private:
     KWebKitPart* part() const;
+};
+
+class KWebKitScriptableExtension : public KParts::ScriptableExtension
+{
+  Q_OBJECT
+
+public:
+    KWebKitScriptableExtension(KWebKitPart* part);
+
+    virtual QVariant rootObject();
+
+    virtual QVariant get(ScriptableExtension* callerPrincipal, quint64 objId, const QString& propName);
+
+    virtual bool put(ScriptableExtension* callerPrincipal, quint64 objId, const QString& propName, const QVariant& value);
+
+    virtual bool setException(ScriptableExtension* callerPrincipal, const QString& message);
+
+    virtual QVariant evaluateScript(ScriptableExtension* callerPrincipal,
+                                    quint64 contextObjectId,
+                                    const QString& code,
+                                    ScriptLanguage language = ECMAScript);
+
+    virtual bool isScriptLanguageSupported(ScriptLanguage lang) const;
+
+private:
+     virtual QVariant encloserForKid(KParts::ScriptableExtension* kid);
+     KWebKitPart* part();
 };
 
 #endif // WEBKITPART_EXT_H

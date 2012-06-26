@@ -18,9 +18,8 @@
 */
 
 #include "webkitsettings.h"
-#include "webkitdefaults.h"
 
-#include "khtml_filter_p.h"
+#include "webkit_filter.h"
 
 #include <KDE/KConfig>
 #include <KDE/KConfigGroup>
@@ -37,6 +36,20 @@
 #include <QtGui/QFontDatabase>
 #include <QtCore/QFileInfo>
 
+// browser window color defaults -- Bernd
+#define HTML_DEFAULT_LNK_COLOR Qt::blue
+#define HTML_DEFAULT_TXT_COLOR Qt::black
+#define HTML_DEFAULT_VLNK_COLOR Qt::magenta
+#define HTML_DEFAULT_BASE_COLOR Qt::white
+
+#define HTML_DEFAULT_VIEW_FONT "Sans Serif"
+#define HTML_DEFAULT_VIEW_FIXED_FONT "Monospace"
+#define HTML_DEFAULT_VIEW_SERIF_FONT "Serif"
+#define HTML_DEFAULT_VIEW_SANSSERIF_FONT "Sans Serif"
+#define HTML_DEFAULT_VIEW_CURSIVE_FONT "Sans Serif"
+#define HTML_DEFAULT_VIEW_FANTASY_FONT "Sans Serif"
+#define HTML_DEFAULT_MIN_FONT_SIZE 7 // everything smaller is usually unreadable.
+
 /**
  * @internal
  * Contains all settings which are both available globally and per-domain
@@ -46,11 +59,11 @@ struct KPerDomainSettings {
     bool m_bEnableJavaScript : 1;
     bool m_bEnablePlugins : 1;
     // don't forget to maintain the bitfields as the enums grow
-    WebKitSettings::KJSWindowOpenPolicy m_windowOpenPolicy : 2;
-    WebKitSettings::KJSWindowStatusPolicy m_windowStatusPolicy : 1;
-    WebKitSettings::KJSWindowFocusPolicy m_windowFocusPolicy : 1;
-    WebKitSettings::KJSWindowMovePolicy m_windowMovePolicy : 1;
-    WebKitSettings::KJSWindowResizePolicy m_windowResizePolicy : 1;
+    KParts::HtmlSettingsInterface::JSWindowOpenPolicy m_windowOpenPolicy : 2;
+    KParts::HtmlSettingsInterface::JSWindowStatusPolicy m_windowStatusPolicy : 1;
+    KParts::HtmlSettingsInterface::JSWindowFocusPolicy m_windowFocusPolicy : 1;
+    KParts::HtmlSettingsInterface::JSWindowMovePolicy m_windowMovePolicy : 1;
+    KParts::HtmlSettingsInterface::JSWindowResizePolicy m_windowResizePolicy : 1;
 
 #ifdef DEBUG_SETTINGS
     void dump(const QString &infix = QString()) const {
@@ -73,8 +86,6 @@ typedef QMap<QString,KPerDomainSettings> PolicyMap;
 class WebKitSettingsData
 {
 public:  
-    WebKitSettingsData() : nonPasswordStorableSites (0) {}
-
     bool m_bChangeCursor : 1;
     bool m_bOpenMiddleClick : 1;
     bool m_bBackRightClick : 1;
@@ -99,6 +110,8 @@ public:
     bool m_useCookieJar : 1;
     bool m_bAutoRefreshPage: 1;
     bool m_bEnableFavicon:1;
+    bool m_disableInternalPluginHandling:1;
+    bool m_offerToSaveWebSitePassword:1;
 
     // the virtual global "domain"
     KPerDomainSettings global;
@@ -121,11 +134,11 @@ public:
     QStringList fonts;
     QStringList defaultFonts;
 
-    khtml::FilterSet adBlackList;
-    khtml::FilterSet adWhiteList;
+    KDEPrivate::FilterSet adBlackList;
+    KDEPrivate::FilterSet adWhiteList;
     QList< QPair< QString, QChar > > m_fallbackAccessKeysAssignments;
 
-    KConfig *nonPasswordStorableSites;  
+    KSharedConfig::Ptr nonPasswordStorableSites;
 };
 
 class WebKitSettingsPrivate : public QObject, public WebKitSettingsData
@@ -200,71 +213,18 @@ static KPerDomainSettings &setup_per_domain_policy(WebKitSettingsPrivate* const 
   return *it;
 }
 
-
-WebKitSettings::KJavaScriptAdvice WebKitSettings::strToAdvice(const QString& _str)
+template<typename T>
+static T readEntry(const KConfigGroup& config, const QString& key, int defaultValue)
 {
-  KJavaScriptAdvice ret = KJavaScriptDunno;
-
-  if (_str.isNull())
-        ret = KJavaScriptDunno;
-
-  if (_str.toLower() == QLatin1String("accept"))
-        ret = KJavaScriptAccept;
-  else if (_str.toLower() == QLatin1String("reject"))
-        ret = KJavaScriptReject;
-
-  return ret;
-}
-
-const char* WebKitSettings::adviceToStr(KJavaScriptAdvice _advice)
-{
-    switch( _advice ) {
-        case KJavaScriptAccept: return I18N_NOOP("Accept");
-        case KJavaScriptReject: return I18N_NOOP("Reject");
-        default: return 0;
-    }
-    return 0;
-}
-
-
-void WebKitSettings::splitDomainAdvice(const QString& configStr, QString &domain,
-                                      KJavaScriptAdvice &javaAdvice, KJavaScriptAdvice& javaScriptAdvice)
-{
-    QString tmp(configStr);
-    int splitIndex = tmp.indexOf(':');
-    if ( splitIndex == -1)
-    {
-        domain = configStr.toLower();
-        javaAdvice = KJavaScriptDunno;
-        javaScriptAdvice = KJavaScriptDunno;
-    }
-    else
-    {
-        domain = tmp.left(splitIndex).toLower();
-        QString adviceString = tmp.mid( splitIndex+1, tmp.length() );
-        int splitIndex2 = adviceString.indexOf( ':' );
-        if( splitIndex2 == -1 ) {
-            // Java advice only
-            javaAdvice = strToAdvice( adviceString );
-            javaScriptAdvice = KJavaScriptDunno;
-        } else {
-            // Java and JavaScript advice
-            javaAdvice = strToAdvice( adviceString.left( splitIndex2 ) );
-            javaScriptAdvice = strToAdvice( adviceString.mid( splitIndex2+1,
-                                                              adviceString.length() ) );
-        }
-    }
+    return static_cast<T>(config.readEntry(key, defaultValue));
 }
 
 void WebKitSettings::readDomainSettings(const KConfigGroup &config, bool reset,
                                         bool global, KPerDomainSettings &pd_settings)
 {
-  QString jsPrefix = global ? QString()
-  				: QString::fromLatin1("javascript.");
-  QString javaPrefix = global ? QString()
-  				: QString::fromLatin1("java.");
-  QString pluginsPrefix = global ? QString()
-  				: QString::fromLatin1("plugins.");
+  const QString javaPrefix ((global ? QString() : QLatin1String("java.")));
+  const QString jsPrefix ((global ? QString() : QLatin1String("javascript.")));
+  const QString pluginsPrefix (global ? QString() : QLatin1String("plugins."));
 
   // The setting for Java
   QString key = javaPrefix + QLatin1String("EnableJava");
@@ -290,51 +250,44 @@ void WebKitSettings::readDomainSettings(const KConfigGroup &config, bool reset,
   // window property policies
   key = jsPrefix + QLatin1String("WindowOpenPolicy");
   if ( (global && reset) || config.hasKey( key ) )
-    pd_settings.m_windowOpenPolicy = (KJSWindowOpenPolicy)
-    		config.readEntry( key, uint(KJSWindowOpenSmart) );
+    pd_settings.m_windowOpenPolicy = readEntry<KParts::HtmlSettingsInterface::JSWindowOpenPolicy>(config, key, KParts::HtmlSettingsInterface::JSWindowOpenSmart);
   else if ( !global )
     pd_settings.m_windowOpenPolicy = d->global.m_windowOpenPolicy;
 
   key = jsPrefix + QLatin1String("WindowMovePolicy");
   if ( (global && reset) || config.hasKey( key ) )
-    pd_settings.m_windowMovePolicy = (KJSWindowMovePolicy)
-    		config.readEntry( key, uint(KJSWindowMoveAllow) );
+    pd_settings.m_windowMovePolicy = readEntry<KParts::HtmlSettingsInterface::JSWindowMovePolicy>(config, key, KParts::HtmlSettingsInterface::JSWindowMoveAllow);
   else if ( !global )
     pd_settings.m_windowMovePolicy = d->global.m_windowMovePolicy;
 
   key = jsPrefix + QLatin1String("WindowResizePolicy");
   if ( (global && reset) || config.hasKey( key ) )
-    pd_settings.m_windowResizePolicy = (KJSWindowResizePolicy)
-    		config.readEntry( key, uint(KJSWindowResizeAllow) );
+    pd_settings.m_windowResizePolicy = readEntry<KParts::HtmlSettingsInterface::JSWindowResizePolicy>(config, key, KParts::HtmlSettingsInterface::JSWindowResizeAllow);
   else if ( !global )
     pd_settings.m_windowResizePolicy = d->global.m_windowResizePolicy;
 
   key = jsPrefix + QLatin1String("WindowStatusPolicy");
   if ( (global && reset) || config.hasKey( key ) )
-    pd_settings.m_windowStatusPolicy = (KJSWindowStatusPolicy)
-    		config.readEntry( key, uint(KJSWindowStatusAllow) );
+    pd_settings.m_windowStatusPolicy = readEntry<KParts::HtmlSettingsInterface::JSWindowStatusPolicy>(config, key, KParts::HtmlSettingsInterface::JSWindowStatusAllow);
   else if ( !global )
     pd_settings.m_windowStatusPolicy = d->global.m_windowStatusPolicy;
 
   key = jsPrefix + QLatin1String("WindowFocusPolicy");
   if ( (global && reset) || config.hasKey( key ) )
-    pd_settings.m_windowFocusPolicy = (KJSWindowFocusPolicy)
-    		config.readEntry( key, uint(KJSWindowFocusAllow) );
+    pd_settings.m_windowFocusPolicy = readEntry<KParts::HtmlSettingsInterface::JSWindowFocusPolicy>(config, key, KParts::HtmlSettingsInterface::JSWindowFocusAllow);
   else if ( !global )
     pd_settings.m_windowFocusPolicy = d->global.m_windowFocusPolicy;
-
 }
 
 
 WebKitSettings::WebKitSettings()
-	:d (new WebKitSettingsPrivate)
+  :d (new WebKitSettingsPrivate)
 {
   init();
 }
 
 WebKitSettings::~WebKitSettings()
 {
-  delete d->nonPasswordStorableSites;
   delete d;
 }
 
@@ -359,24 +312,12 @@ void WebKitSettings::init()
   init( &global, true );
 
   KSharedConfig::Ptr local = KGlobal::config();
-  if ( !local )
-    return;
-
-  init( local.data(), false );
-
-  KConfig cookieConfig ( "kcookiejarrc", KConfig::NoGlobals );
-  KConfigGroup cookieCg ( &cookieConfig, "Cookie Policy");
-  d->m_useCookieJar = cookieCg.readEntry("Cookies", false);
-
-  KConfig cssConfig ( "kcmcssrc", KConfig::NoGlobals );
-  KConfigGroup cssCg( &cssConfig, "Stylesheet");
-  if (cssCg.exists() && cssCg.readEntry("Use", QString()) == QLatin1String("user"))
-    QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl(cssCg.readEntry("SheetName", QString())));
-
-  if (d->nonPasswordStorableSites) {
-    delete d->nonPasswordStorableSites;
-    d->nonPasswordStorableSites = 0;
+  if ( local ) {
+      init( local.data(), false );
   }
+
+  initCookieJarSettings();
+  initWebKitSettings();
 }
 
 void WebKitSettings::init( KConfig * config, bool reset )
@@ -425,7 +366,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
               else
                   d->adBlackList.addFilter(url);
           }
-          else if (name.startsWith("HTMLFilterListName-") && (id = name.mid(19).toInt()) > 0)
+          else if (name.startsWith(QLatin1String("HTMLFilterListName-")) && (id = name.mid(19).toInt()) > 0)
           {
               /** check if entry is enabled */
               bool filterEnabled = cgFilter.readEntry(QString("HTMLFilterListEnabled-").append(QString::number(id))) != QLatin1String("false");
@@ -438,7 +379,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
                   QString localFile = cgFilter.readEntry(QString("HTMLFilterListLocalFilename-").append(QString::number(id)));
                   localFile = KStandardDirs::locateLocal("data", "khtml/" + localFile);
 
-                  /** determine existance and age of cache file */
+                  /** determine existence and age of cache file */
                   QFileInfo fileInfo(localFile);
 
                   /** load cached file if it exists, irrespective of age */
@@ -449,10 +390,9 @@ void WebKitSettings::init( KConfig * config, bool reset )
                   if (!fileInfo.exists() || fileInfo.lastModified().daysTo(QDateTime::currentDateTime()) > htmlFilterListMaxAgeDays)
                   {
                       /** ... in this case, refetch list asynchronously */
-                      kDebug(6000) << "Asynchronously fetching filter list from" << url << "to" << localFile;
-
+                      // kDebug() << "Fetching filter list from" << url << "to" << localFile;
                       KIO::StoredTransferJob *job = KIO::storedGet( url, KIO::Reload, KIO::HideProgressInfo );
-                      QObject::connect( job, SIGNAL( result(KJob *) ), d, SLOT( adblockFilterResult(KJob *) ) );
+                      QObject::connect( job, SIGNAL(result(KJob*)), d, SLOT(adblockFilterResult(KJob*)) );
                       /** for later reference, store name of cache file */
                       job->setProperty("webkitsettings_adBlock_filename", localFile);
                   }
@@ -545,9 +485,11 @@ void WebKitSettings::init( KConfig * config, bool reset )
         d->m_zoomTextOnly = cgHtml.readEntry( "ZoomTextOnly", false );
     }
 
-    if ( cgHtml.readEntry( "UserStyleSheetEnabled", false ) == true ) {
-        if ( reset || cgHtml.hasKey( "UserStyleSheet" ) )
-            d->m_userSheet = cgHtml.readEntry( "UserStyleSheet", "" );
+    if (cgHtml.readEntry("UserStyleSheetEnabled", false)) {
+        if (reset || cgHtml.hasKey("UserStyleSheet"))
+            d->m_userSheet = cgHtml.readEntry("UserStyleSheet", QString());
+    } else {
+        d->m_userSheet.clear();
     }
 
     d->m_formCompletionEnabled = cgHtml.readEntry("FormCompletion", true);
@@ -561,6 +503,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
             d->m_fallbackAccessKeysAssignments.append( qMakePair( (*it).mid( 2 ), (*it)[ 0 ] ));
 
     d->m_bEnableFavicon = cgHtml.readEntry("EnableFavicon", true);
+    d->m_offerToSaveWebSitePassword = cgHtml.readEntry("OfferToSaveWebsitePassword", true);
   }
 
   // Colors
@@ -657,8 +600,7 @@ void WebKitSettings::init( KConfig * config, bool reset )
     }
 
     bool check_old_java = true;
-    if( ( reset || cgJava.hasKey( "JavaDomainSettings" ) )
-    	&& check_old_java_settings )
+    if( (reset || cgJava.hasKey("JavaDomainSettings")) && check_old_java_settings)
     {
       check_old_java = false;
       const QStringList domainList = cgJava.readEntry( "JavaDomainSettings", QStringList() );
@@ -667,20 +609,18 @@ void WebKitSettings::init( KConfig * config, bool reset )
       for ( ; it != itEnd; ++it)
       {
         QString domain;
-        KJavaScriptAdvice javaAdvice;
-        KJavaScriptAdvice javaScriptAdvice;
-        splitDomainAdvice(*it, domain, javaAdvice, javaScriptAdvice);
-        setup_per_domain_policy(d,domain).m_bEnableJava =
-		javaAdvice == KJavaScriptAccept;
+        KParts::HtmlSettingsInterface::JavaScriptAdvice javaAdvice;
+        KParts::HtmlSettingsInterface::JavaScriptAdvice javaScriptAdvice;
+        KParts::HtmlSettingsInterface::splitDomainAdvice(*it, domain, javaAdvice, javaScriptAdvice);
+        setup_per_domain_policy(d,domain).m_bEnableJava = javaAdvice == KParts::HtmlSettingsInterface::JavaScriptAccept;
 #ifdef DEBUG_SETTINGS
-	setup_per_domain_policy(d,domain).dump("JavaDomainSettings 4 "+domain);
+        setup_per_domain_policy(d,domain).dump("JavaDomainSettings 4 "+domain);
 #endif
       }
     }
 
     bool check_old_ecma = true;
-    if( ( reset || cgJava.hasKey( "ECMADomainSettings" ) )
-	&& check_old_ecma_settings )
+    if( ( reset || cgJava.hasKey( "ECMADomainSettings" ) ) && check_old_ecma_settings )
     {
       check_old_ecma = false;
       const QStringList domainList = cgJava.readEntry( "ECMADomainSettings", QStringList() );
@@ -689,11 +629,11 @@ void WebKitSettings::init( KConfig * config, bool reset )
       for ( ; it != itEnd; ++it)
       {
         QString domain;
-        KJavaScriptAdvice javaAdvice;
-        KJavaScriptAdvice javaScriptAdvice;
-        splitDomainAdvice(*it, domain, javaAdvice, javaScriptAdvice);
+        KParts::HtmlSettingsInterface::JavaScriptAdvice javaAdvice;
+        KParts::HtmlSettingsInterface::JavaScriptAdvice javaScriptAdvice;
+        KParts::HtmlSettingsInterface::splitDomainAdvice(*it, domain, javaAdvice, javaScriptAdvice);
         setup_per_domain_policy(d,domain).m_bEnableJavaScript =
-			javaScriptAdvice == KJavaScriptAccept;
+			javaScriptAdvice == KParts::HtmlSettingsInterface::JavaScriptAccept;
 #ifdef DEBUG_SETTINGS
 	setup_per_domain_policy(d,domain).dump("ECMADomainSettings 4 "+domain);
 #endif
@@ -710,48 +650,17 @@ void WebKitSettings::init( KConfig * config, bool reset )
       for ( ; it != itEnd; ++it)
       {
         QString domain;
-        KJavaScriptAdvice javaAdvice;
-        KJavaScriptAdvice javaScriptAdvice;
-        splitDomainAdvice(*it, domain, javaAdvice, javaScriptAdvice);
+        KParts::HtmlSettingsInterface::JavaScriptAdvice javaAdvice;
+        KParts::HtmlSettingsInterface::JavaScriptAdvice javaScriptAdvice;
+        KParts::HtmlSettingsInterface::splitDomainAdvice(*it, domain, javaAdvice, javaScriptAdvice);
         if( check_old_java )
-          setup_per_domain_policy(d,domain).m_bEnableJava =
-	  		javaAdvice == KJavaScriptAccept;
+          setup_per_domain_policy(d,domain).m_bEnableJava = javaAdvice == KParts::HtmlSettingsInterface::JavaScriptAccept;
         if( check_old_ecma )
-          setup_per_domain_policy(d,domain).m_bEnableJavaScript =
-	  		javaScriptAdvice == KJavaScriptAccept;
+          setup_per_domain_policy(d,domain).m_bEnableJavaScript = javaScriptAdvice == KParts::HtmlSettingsInterface::JavaScriptAccept;
 #ifdef DEBUG_SETTINGS
-	setup_per_domain_policy(d,domain).dump("JavaScriptDomainAdvice 4 "+domain);
+        setup_per_domain_policy(d,domain).dump("JavaScriptDomainAdvice 4 "+domain);
 #endif
       }
-
-      //save all the settings into the new keywords if they don't exist
-#if 0
-      if( check_old_java )
-      {
-        QStringList domainConfig;
-        PolicyMap::Iterator it;
-        for( it = d->javaDomainPolicy.begin(); it != d->javaDomainPolicy.end(); ++it )
-        {
-          QByteArray javaPolicy = adviceToStr( it.value() );
-          QByteArray javaScriptPolicy = adviceToStr( KJavaScriptDunno );
-          domainConfig.append(QString::fromLatin1("%1:%2:%3").arg(it.key()).arg(javaPolicy).arg(javaScriptPolicy));
-        }
-        cg.writeEntry( "JavaDomainSettings", domainConfig );
-      }
-
-      if( check_old_ecma )
-      {
-        QStringList domainConfig;
-        PolicyMap::Iterator it;
-        for( it = d->javaScriptDomainPolicy.begin(); it != d->javaScriptDomainPolicy.end(); ++it )
-        {
-          QByteArray javaPolicy = adviceToStr( KJavaScriptDunno );
-          QByteArray javaScriptPolicy = adviceToStr( it.value() );
-          domainConfig.append(QString::fromLatin1("%1:%2:%3").arg(it.key()).arg(javaPolicy).arg(javaScriptPolicy));
-        }
-        cg.writeEntry( "ECMADomainSettings", domainConfig );
-      }
-#endif
     }
   }
 
@@ -764,23 +673,22 @@ void WebKitSettings::init( KConfig * config, bool reset )
         QWebSettings::globalSettings()->setAttribute(QWebSettings::DnsPrefetchEnabled, true);
     else
         QWebSettings::globalSettings()->setAttribute(QWebSettings::DnsPrefetchEnabled, false);
-  }  
+  }
 
   // Sync with QWebSettings.
   if (!d->m_encoding.isEmpty())
       QWebSettings::globalSettings()->setDefaultTextEncoding(d->m_encoding);
 
-  if (!userStyleSheet().isEmpty()) {
-      QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl(userStyleSheet()));
-  }
+  QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl::fromLocalFile(userStyleSheet()));
+
   QWebSettings::globalSettings()->setAttribute(QWebSettings::AutoLoadImages, autoLoadImages());
   QWebSettings::globalSettings()->setAttribute(QWebSettings::JavascriptEnabled, isJavaScriptEnabled());
   QWebSettings::globalSettings()->setAttribute(QWebSettings::JavaEnabled, isJavaEnabled());
   QWebSettings::globalSettings()->setAttribute(QWebSettings::PluginsEnabled, isPluginsEnabled());
 
   // By default disable JS window.open when policy is deny or smart.
-  const KJSWindowOpenPolicy policy = windowOpenPolicy();
-  if (policy == WebKitSettings::KJSWindowOpenDeny || policy == WebKitSettings::KJSWindowOpenSmart)
+  const KParts::HtmlSettingsInterface::JSWindowOpenPolicy policy = windowOpenPolicy();
+  if (policy == KParts::HtmlSettingsInterface::JSWindowOpenDeny || policy == KParts::HtmlSettingsInterface::JSWindowOpenSmart)
       QWebSettings::globalSettings()->setAttribute(QWebSettings::JavascriptCanOpenWindows, false);
   else
       QWebSettings::globalSettings()->setAttribute(QWebSettings::JavascriptCanOpenWindows, true);
@@ -794,8 +702,15 @@ void WebKitSettings::init( KConfig * config, bool reset )
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::CursiveFont, cursiveFontName());
   QWebSettings::globalSettings()->setFontFamily(QWebSettings::FantasyFont, fantasyFontName());
 
+  // TODO: Make all of these WebKit specific options configurable, i.e. create a webkit config
+  // module that gets embeded into Konqueror's kcm.
 #if QTWEBKIT_VERSION >= QTWEBKIT_VERSION_CHECK(2, 2, 0)
+  // Turn on WebGL support
   QWebSettings::globalSettings()->setAttribute(QWebSettings::WebGLEnabled, true);
+  // Turn on HTML 5 local and offline storage capabilities...
+  QWebSettings::globalSettings()->setAttribute(QWebSettings::OfflineStorageDatabaseEnabled, true);
+  QWebSettings::globalSettings()->setAttribute(QWebSettings::OfflineWebApplicationCacheEnabled, true);
+  QWebSettings::globalSettings()->setAttribute(QWebSettings::LocalStorageEnabled, true);
 #endif
 
   // These numbers should be calculated from real "logical" DPI/72, using a default dpi of 96 for now
@@ -818,9 +733,8 @@ void WebKitSettings::computeFontSizes( int logicalDpi )
   *
   * In case of doubt, the global domain is returned.
   */
-static const KPerDomainSettings &lookup_hostname_policy(
-			const WebKitSettingsPrivate* const d,
-			const QString& hostname)
+static const KPerDomainSettings &lookup_hostname_policy(const WebKitSettingsPrivate* const d,
+                                                        const QString& hostname)
 {
 #ifdef DEBUG_SETTINGS
   kDebug() << "lookup_hostname_policy(" << hostname << ")";
@@ -999,27 +913,27 @@ bool WebKitSettings::isPluginsEnabled( const QString& hostname ) const
   return lookup_hostname_policy(d,hostname.toLower()).m_bEnablePlugins;
 }
 
-WebKitSettings::KJSWindowOpenPolicy WebKitSettings::windowOpenPolicy(
+KParts::HtmlSettingsInterface::JSWindowOpenPolicy WebKitSettings::windowOpenPolicy(
 				const QString& hostname) const {
   return lookup_hostname_policy(d,hostname.toLower()).m_windowOpenPolicy;
 }
 
-WebKitSettings::KJSWindowMovePolicy WebKitSettings::windowMovePolicy(
+KParts::HtmlSettingsInterface::JSWindowMovePolicy WebKitSettings::windowMovePolicy(
 				const QString& hostname) const {
   return lookup_hostname_policy(d,hostname.toLower()).m_windowMovePolicy;
 }
 
-WebKitSettings::KJSWindowResizePolicy WebKitSettings::windowResizePolicy(
+KParts::HtmlSettingsInterface::JSWindowResizePolicy WebKitSettings::windowResizePolicy(
 				const QString& hostname) const {
   return lookup_hostname_policy(d,hostname.toLower()).m_windowResizePolicy;
 }
 
-WebKitSettings::KJSWindowStatusPolicy WebKitSettings::windowStatusPolicy(
+KParts::HtmlSettingsInterface::JSWindowStatusPolicy WebKitSettings::windowStatusPolicy(
 				const QString& hostname) const {
   return lookup_hostname_policy(d,hostname.toLower()).m_windowStatusPolicy;
 }
 
-WebKitSettings::KJSWindowFocusPolicy WebKitSettings::windowFocusPolicy(
+KParts::HtmlSettingsInterface::JSWindowFocusPolicy WebKitSettings::windowFocusPolicy(
 				const QString& hostname) const {
   return lookup_hostname_policy(d,hostname.toLower()).m_windowFocusPolicy;
 }
@@ -1093,12 +1007,15 @@ const QString &WebKitSettings::availableFamilies()
 
 QString WebKitSettings::lookupFont(int i) const
 {
-    QString font;
-    if (d->fonts.count() > i)
-       font = d->fonts[i];
-    if (font.isEmpty())
-        font = d->defaultFonts[i];
-    return font;
+    if (d->fonts.count() > i) {
+        return d->fonts.at(i);
+    }
+
+    if (d->defaultFonts.count() > i) {
+        return d->defaultFonts.at(i);
+    }
+
+    return QString();
 }
 
 QString WebKitSettings::stdFontName() const
@@ -1274,24 +1191,25 @@ bool WebKitSettings::isCookieJarEnabled() const
 }
 
 // Password storage...
-bool WebKitSettings::isNonPasswordStorableSite(const QString &host) const
+static KConfigGroup nonPasswordStorableSitesCg(KSharedConfig::Ptr& configPtr)
 {
-    if (!d->nonPasswordStorableSites) {
-        d->nonPasswordStorableSites = new KConfig(KStandardDirs::locateLocal("data", "khtml/formcompletions"));
+    if (!configPtr) {
+        configPtr = KSharedConfig::openConfig(KStandardDirs::locateLocal("data", "khtml/formcompletions"), KConfig::NoGlobals);
     }
 
-    KConfigGroup cg( d->nonPasswordStorableSites, "NonPasswordStorableSites");
-    QStringList sites =  cg.readEntry("Sites", QStringList());
+    return KConfigGroup(configPtr, "NonPasswordStorableSites");
+}
+
+bool WebKitSettings::isNonPasswordStorableSite(const QString &host) const
+{
+    KConfigGroup cg = nonPasswordStorableSitesCg(d->nonPasswordStorableSites);
+    const QStringList sites = cg.readEntry("Sites", QStringList());
     return sites.contains(host);
 }
 
 void WebKitSettings::addNonPasswordStorableSite(const QString &host)
 {
-    if (!d->nonPasswordStorableSites) {
-        d->nonPasswordStorableSites = new KConfig(KStandardDirs::locateLocal("data", "khtml/formcompletions"));
-    }
-
-    KConfigGroup cg( d->nonPasswordStorableSites, "NonPasswordStorableSites");
+    KConfigGroup cg = nonPasswordStorableSitesCg(d->nonPasswordStorableSites);
     QStringList sites = cg.readEntry("Sites", QStringList());
     sites.append(host);
     cg.writeEntry("Sites", sites);
@@ -1300,15 +1218,38 @@ void WebKitSettings::addNonPasswordStorableSite(const QString &host)
 
 void WebKitSettings::removeNonPasswordStorableSite(const QString &host)
 {
-    if (!d->nonPasswordStorableSites) {
-        d->nonPasswordStorableSites = new KConfig(KStandardDirs::locateLocal("data", "khtml/formcompletions"));
-    }
-
-    KConfigGroup cg( d->nonPasswordStorableSites, "NonPasswordStorableSites");
+    KConfigGroup cg = nonPasswordStorableSitesCg(d->nonPasswordStorableSites);
     QStringList sites = cg.readEntry("Sites", QStringList());
     sites.removeOne(host);
     cg.writeEntry("Sites", sites);
     cg.sync();
+}
+
+bool WebKitSettings::askToSaveSitePassword() const
+{
+    return d->m_offerToSaveWebSitePassword;
+}
+
+bool WebKitSettings::isInternalPluginHandlingDisabled() const
+{
+    return d->m_disableInternalPluginHandling;
+}
+
+void WebKitSettings::initWebKitSettings()
+{
+    KConfig cfg ("kwebkitpartrc", KConfig::NoGlobals);
+    KConfigGroup generalCfg (&cfg, "General");
+    d->m_disableInternalPluginHandling = generalCfg.readEntry("DisableInternalPluginHandling", false);
+
+    // Force the reloading of the non password storable sites settings.
+    d->nonPasswordStorableSites.clear();
+}
+
+void WebKitSettings::initCookieJarSettings()
+{
+    KSharedConfig::Ptr cookieCfgPtr = KSharedConfig::openConfig("kcookiejarrc", KConfig::NoGlobals);
+    KConfigGroup cookieCfg ( cookieCfgPtr, "Cookie Policy");
+    d->m_useCookieJar = cookieCfg.readEntry("Cookies", false);
 }
 
 WebKitSettings* WebKitSettings::self()

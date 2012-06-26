@@ -3,20 +3,18 @@
  *
  * Copyright (C) 2009 Dawit Alemayehu <adawit @ kde.org>
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License as published by the Free Software Foundation; either
- * version 2 of the License, or (at your option) any later version.
+ * This library is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as published by the
+ * Free Software Foundation; either version 2.1 of the License, or (at your
+ * option) any later version.
  *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
+ * This library is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public License for more
+ * details.
  *
- * You should have received a copy of the GNU Library General Public License
- * along with this library; see the file COPYING.LIB.  If not, write to
- * the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
- * Boston, MA 02110-1301, USA.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
 
@@ -25,8 +23,11 @@
 
 #include <KDE/KDebug>
 #include <KDE/KLocalizedString>
+#include <KDE/KProtocolInfo>
+#include <KDE/KRun>
 
 #include <QtCore/QTimer>
+#include <QtGui/QWidget>
 #include <QtNetwork/QNetworkReply>
 #include <QtWebKit/QWebFrame>
 #include <QtWebKit/QWebElementCollection>
@@ -82,8 +83,13 @@ static bool blockRequest(QNetworkAccessManager::Operation op, const QUrl& reques
 
 QNetworkReply *MyNetworkAccessManager::createRequest(Operation op, const QNetworkRequest &req, QIODevice *outgoingData)
 {
-    if (!blockRequest(op, req.url()))
+    if (!blockRequest(op, req.url())) {
+        if (KProtocolInfo::isHelperProtocol(req.url())) {
+            (void) new KRun(req.url(), qobject_cast<QWidget*>(req.originatingObject()));
+            return new NullNetworkReply(req, this);
+        }
         return KIO::AccessManager::createRequest(op, req, outgoingData);
+    }
 
     QWebFrame* frame = qobject_cast<QWebFrame*>(req.originatingObject());
     if (frame) {
