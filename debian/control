@@ -13,9 +13,7 @@ Vcs-Browser: http://git.debian.org/?p=pkg-kde/kde-extras/webkitkde.git
 Package: kpart-webkit
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Conflicts: libkwebkit-dev (<< 1.2), libkwebkit1 (<< 1.2)
-Replaces: libkwebkit1 (<< 1.2)
-Provides: libkwebkit1
+Breaks: libkwebkit-dev (<< 1.2), libkwebkit1 (<< 1.2)
 Description: WebKit KPart
  This package contains a plug-In for alowing the Konqueror web browser and
  other KDE applications to use the WebKit HTML renderer instead of the
