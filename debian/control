@@ -24,6 +24,7 @@ Section: debug
 Priority: extra
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, kpart-webkit (= ${binary:Version})
+Breaks: libkwebkit-dbg (<< 1.2)
 Description: WebKit KPart - debugging symbols
  This package contains a plug-In for alowing the Konqueror web browser and
  other KDE applications to use the WebKit HTML renderer instead of the
