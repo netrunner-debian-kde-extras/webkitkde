@@ -13,8 +13,8 @@ Vcs-Browser: http://git.debian.org/?p=pkg-kde/kde-extras/webkitkde.git
 Package: kpart-webkit
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Conflicts: libkwebkit-dev (<< 1.2), libkwebkit1 (<< 1.2)
-Replaces: libkwebkit1 (<< 1.2)
+Conflicts: libkwebkit-dev, libkwebkit1
+Replaces: libkwebkit1
 Provides: libkwebkit1
 Description: WebKit KPart
  This package contains a plug-In for alowing the Konqueror web browser and
@@ -26,7 +26,9 @@ Section: debug
 Priority: extra
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, kpart-webkit (= ${binary:Version})
-Breaks: libkwebkit-dbg (<< 1.2)
+Conflicts: libkwebkit-dbg
+Replaces: libkwebkit-dbg
+Provides: libkwebkit-dbg
 Description: WebKit KPart - debugging symbols
  This package contains a plug-In for alowing the Konqueror web browser and
  other KDE applications to use the WebKit HTML renderer instead of the

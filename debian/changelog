@@ -1,4 +1,4 @@
-webkitkde (1.3~git20120518.9a111005-1) UNRELEASED; urgency=low
+webkitkde (1.3~git20120518.9a111005-1) unstable; urgency=low
 
   [ Adrien Grellier ]
   * New Maintainer (Closes: #624448)
