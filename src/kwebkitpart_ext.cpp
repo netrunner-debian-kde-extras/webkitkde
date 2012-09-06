@@ -45,32 +45,48 @@
 #include <sonnet/backgroundchecker.h>
 #include <kdeversion.h>
 
-#include <QtCore/QBuffer>
-#include <QtCore/QMapIterator>
-#include <QtCore/QCryptographicHash>
-#include <QtGui/QClipboard>
-#include <QtGui/QApplication>
-#include <QtGui/QPrinter>
-#include <QtGui/QPrintDialog>
-#include <QtGui/QPrintPreviewDialog>
-#include <QtWebKit/QWebFrame>
-#include <QtWebKit/QWebHistory>
-#include <QtWebKit/QWebElement>
-#include <QtWebKit/QWebElementCollection>
+#include <QBuffer>
+#include <QVariant>
+#include <QClipboard>
+#include <QApplication>
+#include <QPrinter>
+#include <QPrintDialog>
+#include <QPrintPreviewDialog>
+#include <QWebFrame>
+#include <QWebHistory>
+#include <QWebElement>
+#include <QWebElementCollection>
 
 #define QL1S(x)     QLatin1String(x)
 #define QL1C(x)     QLatin1Char(x)
 
 
-WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent)
+WebKitBrowserExtension::WebKitBrowserExtension(KWebKitPart *parent, const QByteArray& cachedHistoryData)
                        :KParts::BrowserExtension(parent),
-                        m_part(QWeakPointer<KWebKitPart>(parent)),
-                        m_currentHistoryItemIndex(-1)
+                        m_part(parent)
 {
     enableAction("cut", false);
     enableAction("copy", false);
     enableAction("paste", false);
     enableAction("print", true);
+
+    if (cachedHistoryData.isEmpty()) {
+        return;
+    }
+
+    QBuffer buffer;
+    buffer.setData(cachedHistoryData);
+    if (!buffer.open(QIODevice::ReadOnly)) {
+        return;
+    }
+
+    // NOTE: When restoring history, webkit automatically navigates to
+    // the previous "currentItem". Since we do not want that to happen,
+    // we set a property on the WebPage object that is used to allow or
+    // disallow history navigation in WebPage::acceptNavigationRequest.
+    view()->page()->setProperty("HistoryNavigationLocked", true);
+    QDataStream s (&buffer);
+    s >> *(view()->history());
 }
 
 WebKitBrowserExtension::~WebKitBrowserExtension()
@@ -80,10 +96,10 @@ WebKitBrowserExtension::~WebKitBrowserExtension()
 WebView* WebKitBrowserExtension::view()
 {
     if (!m_view && m_part) {
-        m_view = QWeakPointer<WebView>(qobject_cast<WebView*>(m_part.data()->view()));
+        m_view = qobject_cast<WebView*>(m_part->view());
     }
 
-    return m_view.data();
+    return m_view;
 }
 
 int WebKitBrowserExtension::xOffset()
@@ -105,10 +121,14 @@ int WebKitBrowserExtension::yOffset()
 void WebKitBrowserExtension::saveState(QDataStream &stream)
 {
     // TODO: Save information such as form data from the current page.
-    stream << m_part.data()->url()
+    QWebHistory* history = (view() ? view()->history() : 0);
+    const int historyIndex = (history ? history->currentItemIndex() : -1);
+    const KUrl historyUrl = (history ? KUrl(history->currentItem().url()) : m_part->url());
+
+    stream << historyUrl
            << static_cast<qint32>(xOffset())
            << static_cast<qint32>(yOffset())
-           << m_currentHistoryItemIndex
+           << historyIndex
            << m_historyData;
 }
 
@@ -145,23 +165,24 @@ void WebKitBrowserExtension::restoreState(QDataStream &stream)
                         if (QCoreApplication::applicationName() == QLatin1String("konqueror")) {
                             history->clear();
                         }
-                        m_part.data()->setProperty("NoEmitOpenUrlNotification", true);
+                        //kDebug() << "Restoring URL:" << currentItem.url();
+                        m_part->setProperty("NoEmitOpenUrlNotification", true);
                         history->goToItem(currentItem);
                     }
                 }
             }
             success = (history->count() > 0);
         } else {        // Handle navigation: back and forward button navigation.
-            kDebug() << "history count:" << history->count() << "request index:" << historyItemIndex;
+            //kDebug() << "history count:" << history->count() << "request index:" << historyItemIndex;
             if (history->count() > historyItemIndex && historyItemIndex > -1) {
                 QWebHistoryItem item (history->itemAt(historyItemIndex));
-                kDebug() << "URL:" << u << "Item URL:" << item.url();
+                //kDebug() << "URL:" << u << "Item URL:" << item.url();
                 if (u == item.url()) {
                     if (item.userData().isNull() && (xOfs != -1 || yOfs != -1)) {
                         const QPoint scrollPos (xOfs, yOfs);
                         item.setUserData(scrollPos);
                     }
-                    m_part.data()->setProperty("NoEmitOpenUrlNotification", true);
+                    m_part->setProperty("NoEmitOpenUrlNotification", true);
                     history->goToItem(item);
                     success = true;
                 }
@@ -175,29 +196,8 @@ void WebKitBrowserExtension::restoreState(QDataStream &stream)
 
     // As a last resort, in case the history restoration logic above fails,
     // attempt to open the requested URL directly.
-    kDebug() << "Normal history navgation logic failed! Falling back to a workaround!";
-    m_part.data()->openUrl(u);
-}
-
-void WebKitBrowserExtension::restoreHistoryFromData (const QByteArray& data)
-{
-    if (data.isEmpty()) {
-        return;
-    }
-
-    QBuffer buffer;
-    buffer.setData(data);
-    if (!buffer.open(QIODevice::ReadOnly)) {
-        return;
-    }
-
-    // NOTE: When restoring history, webkit automatically navigates to
-    // the previous "currentItem". Since we do not want that to happen,
-    // we set a property on the WebPage object that is used to allow or
-    // disallow history navigation in WebPage::acceptNavigationRequest.
-    view()->page()->setProperty("HistoryNavigationLocked", true);
-    QDataStream s (&buffer);
-    s >> *(view()->history());
+    kDebug() << "Normal history navgation logic failed! Falling back to opening url directly.";
+    m_part->openUrl(u);
 }
 
 
@@ -249,7 +249,7 @@ void WebKitBrowserExtension::updateEditActions()
 
 void WebKitBrowserExtension::updateActions()
 {
-    const QString protocol (m_part.data()->url().protocol());
+    const QString protocol (m_part->url().protocol());
     const bool isValidDocument = (protocol != QL1S("about") && protocol != QL1S("error"));
     enableAction("print", isValidDocument);
 }
@@ -765,7 +765,7 @@ void WebKitBrowserExtension::spellCheckerMisspelling(const QString& text, int po
 
 void WebKitBrowserExtension::slotSpellCheckDone(const QString&)
 {
-    // Restore the text selection of one was present before we started the
+    // Restore the text selection if one was present before we started the
     // spell check.
     if (m_spellTextSelectionStart > 0 || m_spellTextSelectionEnd > 0) {
         QString script (QL1S("; this.setSelectionRange("));
@@ -778,30 +778,28 @@ void WebKitBrowserExtension::slotSpellCheckDone(const QString&)
 }
 
 
-void WebKitBrowserExtension::slotSaveHistory()
+void WebKitBrowserExtension::saveHistory()
 {
-    QByteArray histData;
-    QBuffer buff (&histData);
-    if (!buff.open(QIODevice::WriteOnly)) {
-        kWarning() << "Failed to save history data!";
-        return;
-    }
+    QWebHistory* history = (view() ? view()->history() : 0);
 
-    QWebHistory* history = view() ? view()->history() : 0;
     if (history && history->count() > 0) {
-        QDataStream stream (&buff);
-        stream << *history;
-        m_historyData = qCompress(histData, 9);
-        m_currentHistoryItemIndex = history->currentItemIndex();
-        QWidget* mainWidget = m_part.data() ? m_part.data()->widget() : 0;
+        //kDebug() << "Current history: index=" << history->currentItemIndex() << "url=" << history->currentItem().url();
+        QByteArray histData;
+        QBuffer buff (&histData);
+        m_historyData.clear();
+        if (buff.open(QIODevice::WriteOnly)) {
+            QDataStream stream (&buff);
+            stream << *history;
+            m_historyData = qCompress(histData, 9);
+        }
+        QWidget* mainWidget = m_part ? m_part->widget() : 0;
         QWidget* frameWidget = mainWidget ? mainWidget->parentWidget() : 0;
         if (frameWidget) {
             emit saveHistory(frameWidget, m_historyData);
             // kDebug() << "# of items:" << history->count() << "current item:" << history->currentItemIndex() << "url:" << history->currentItem().url();
         }
     } else {
-        m_historyData.clear();
-        m_currentHistoryItemIndex = -1;
+        Q_ASSERT(false); // should never happen!!!
     }
 }
 
@@ -926,8 +924,8 @@ bool KWebKitHtmlExtension::hasSelection() const
 
 KParts::SelectorInterface::QueryMethods KWebKitHtmlExtension::supportedQueryMethods() const
 {
-    // TODO: Add support for selected content...
-    return KParts::SelectorInterface::EntireContent;
+    return (KParts::SelectorInterface::EntireContent
+            | KParts::SelectorInterface::SelectedContent);
 }
 
 static KParts::SelectorInterface::Element convertWebElement(const QWebElement& webElem)
@@ -938,6 +936,53 @@ static KParts::SelectorInterface::Element convertWebElement(const QWebElement& w
         element.setAttribute(attr, webElem.attribute(attr));
     }
     return element;
+}
+
+
+static QString queryOne(const QString& query)
+{
+   QString jsQuery = QL1S("(function(query) { var element; var selectedElement = window.getSelection().getRangeAt(0).cloneContents().querySelector(\"");
+   jsQuery += query;
+   jsQuery += QL1S("\"); if (selectedElement && selectedElement.length > 0) { element = new Object; "
+                   "element.tagName = selectedElements[0].tagName; element.href = selectedElements[0].href; } "
+                   "return element; }())");
+   return jsQuery;
+}
+
+static QString queryAll(const QString& query)
+{
+   QString jsQuery = QL1S("(function(query) { var elements = []; var selectedElements = window.getSelection().getRangeAt(0).cloneContents().querySelectorAll(\"");
+   jsQuery += query;
+   jsQuery += QL1S("\"); var numSelectedElements = (selectedElements ? selectedElements.length : 0);"
+                   "for (var i = 0; i < numSelectedElements; ++i) { var element = new Object; "
+                   "element.tagName = selectedElements[i].tagName; element.href = selectedElements[i].href;"
+                   "elements.push(element); } return elements; } ())");
+   return jsQuery;
+}
+
+static KParts::SelectorInterface::Element convertSelectionElement(const QVariant& variant)
+{
+    KParts::SelectorInterface::Element element;
+    if (!variant.isNull() && variant.type() == QVariant::Map) {
+        const QVariantMap elementMap (variant.toMap());
+        element.setTagName(elementMap.value(QL1S("tagName")).toString());
+        element.setAttribute(QL1S("href"), elementMap.value(QL1S("href")).toString());
+    }
+    return element;
+}
+
+static QList<KParts::SelectorInterface::Element> convertSelectionElements(const QVariant& variant)
+{
+    QList<KParts::SelectorInterface::Element> elements;
+    const QVariantList resultList (variant.toList());
+    Q_FOREACH(const QVariant& result, resultList) {
+        const QVariantMap elementMap = result.toMap();
+        KParts::SelectorInterface::Element element;
+        element.setTagName(elementMap.value(QL1S("tagName")).toString());
+        element.setAttribute(QL1S("href"), elementMap.value(QL1S("href")).toString());
+        elements.append(element);
+    }
+    return elements;
 }
 
 KParts::SelectorInterface::Element KWebKitHtmlExtension::querySelector(const QString& query, KParts::SelectorInterface::QueryMethod method) const
@@ -958,8 +1003,11 @@ KParts::SelectorInterface::Element KWebKitHtmlExtension::querySelector(const QSt
         element = convertWebElement(webFrame->findFirstElement(query));
         break;
     }
-    case KParts::SelectorInterface::SelectedContent:
-        // TODO: Implement support for querying only selected content...
+    case KParts::SelectorInterface::SelectedContent: {
+        QWebFrame* webFrame = part()->view()->page()->mainFrame();
+        element = convertSelectionElement(webFrame->evaluateJavaScript(queryOne(query)));
+        break;
+    }
     default:
         break;
     }
@@ -988,8 +1036,11 @@ QList<KParts::SelectorInterface::Element> KWebKitHtmlExtension::querySelectorAll
             elements.append(convertWebElement(element));
         break;
     }
-    case KParts::SelectorInterface::SelectedContent:
-        // TODO: Implement support for querying only selected content...
+    case KParts::SelectorInterface::SelectedContent: {
+        QWebFrame* webFrame = part()->view()->page()->mainFrame();
+        elements = convertSelectionElements(webFrame->evaluateJavaScript(queryAll(query)));
+        break;
+    }
     default:
         break;
     }
@@ -1106,7 +1157,7 @@ bool KWebKitScriptableExtension::setException (KParts::ScriptableExtension* call
 
 QVariant KWebKitScriptableExtension::get (KParts::ScriptableExtension* callerPrincipal, quint64 objId, const QString& propName)
 {
-    kDebug() << "caller:" << callerPrincipal << "id:" << objId << "propName:" << propName;
+    //kDebug() << "caller:" << callerPrincipal << "id:" << objId << "propName:" << propName;
     return callerPrincipal->get (0, objId, propName);
 }
 
@@ -1117,7 +1168,7 @@ bool KWebKitScriptableExtension::put (KParts::ScriptableExtension* callerPrincip
 
 static QVariant exception(const char* msg)
 {
-    kWarning(6031) << msg;
+    kWarning() << msg;
     return QVariant::fromValue(KParts::ScriptableExtension::Exception(QString::fromLatin1(msg)));
 }
 
@@ -1126,7 +1177,8 @@ QVariant KWebKitScriptableExtension::evaluateScript (KParts::ScriptableExtension
                                                      const QString& code,
                                                      KParts::ScriptableExtension::ScriptLanguage lang)
 {
-    kDebug() << "principal:" << callerPrincipal << "id:" << contextObjectId << "language:" << lang << "code:" << code;
+    Q_UNUSED(contextObjectId);
+    //kDebug() << "principal:" << callerPrincipal << "id:" << contextObjectId << "language:" << lang << "code:" << code;
 
     if (lang != ECMAScript)
         return exception("unsupported language");

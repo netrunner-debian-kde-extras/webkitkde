@@ -21,19 +21,55 @@
 #ifndef WEBPLUGINFACTORY_H
 #define WEBPLUGINFACTORY_H
 
-
 #include <KDE/KWebPluginFactory>
 
+#include <QList>
+#include <QUrl>
+#include <QWidget>
+#include <QPointer>
+
 class KWebKitPart;
+class QPoint;
+
+class FakePluginWidget : public QWidget
+{
+    Q_OBJECT
+    Q_PROPERTY(bool swapping READ swapping)
+
+public:
+    FakePluginWidget(uint id, const QUrl& url, const QString& mimeType, QWidget* parent = 0);
+    bool swapping() const { return m_swapping; }
+
+Q_SIGNALS:
+    void pluginLoaded(uint);
+
+private Q_SLOTS:
+    void loadAll();
+    void load(bool loadAll = false);
+    void showContextMenu(const QPoint&);
+    void updateScrollPoisition(int, int, const QRect&);
+
+private:
+    bool m_swapping;
+    bool m_updateScrollPosition;
+    QString m_mimeType;
+    uint m_id;
+};
 
 class WebPluginFactory : public KWebPluginFactory
 {
+    Q_OBJECT
 public:
-    WebPluginFactory (KWebKitPart* parent = 0);
+    WebPluginFactory (KWebKitPart* part, QObject* parent = 0);
     virtual QObject* create (const QString&, const QUrl&, const QStringList&, const QStringList&) const;
+    void resetPluginOnDemandList();
+
+private Q_SLOTS:
+    void loadedPlugin(uint);
 
 private:
-    KWebKitPart* mPart;
+    QPointer<KWebKitPart> mPart;
+    mutable QList<uint> mPluginsLoadedOnDemand;
 };
 
 #endif

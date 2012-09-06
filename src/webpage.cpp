@@ -48,28 +48,30 @@
 #include <KIO/Scheduler>
 #include <KParts/HtmlExtension>
 
-#include <QtCore/QFile>
-#include <QtGui/QApplication>
-#include <QtGui/QTextDocument> // Qt::escape
-#include <QtNetwork/QNetworkReply>
-
-#include <QtWebKit/QWebFrame>
-#include <QtWebKit/QWebElement>
-#include <QtWebKit/QWebHistory>
-#include <QtWebKit/QWebHistoryItem>
-#include <QtWebKit/QWebSecurityOrigin>
+#include <QFile>
+#include <QApplication>
+#include <QTextDocument> // Qt::escape
+#include <QNetworkReply>
+#include <QWebFrame>
+#include <QWebElement>
+#include <QWebHistory>
+#include <QWebHistoryItem>
+#include <QWebSecurityOrigin>
 
 #define QL1S(x)  QLatin1String(x)
 #define QL1C(x)  QLatin1Char(x)
 
-
+static bool isBlankUrl(const KUrl& url)
+{
+    return (url.isEmpty() || url.url() == QL1S("about:blank"));
+}
 
 WebPage::WebPage(KWebKitPart *part, QWidget *parent)
         :KWebPage(parent, (KWebPage::KPartsIntegration|KWebPage::KWalletIntegration)),
          m_kioErrorCode(0),
          m_ignoreError(false),
          m_noJSOpenWindowCheck(false),
-         m_part(QWeakPointer<KWebKitPart>(part))
+         m_part(part)
 {
     // FIXME: Need a better way to handle request filtering than to inherit
     // KIO::Integration::AccessManager...
@@ -82,7 +84,7 @@ WebPage::WebPage(KWebKitPart *part, QWidget *parent)
     }
     setNetworkAccessManager(manager);
 
-    setPluginFactory(new WebPluginFactory(part));
+    setPluginFactory(new WebPluginFactory(part, this));
 
     setSessionMetaData(QL1S("ssl_activate_warnings"), QL1S("TRUE"));
 
@@ -92,8 +94,7 @@ WebPage::WebPage(KWebKitPart *part, QWidget *parent)
 
     setForwardUnsupportedContent(true);
 
-    // Add all KDE's local protocols + the error protocol to QWebSecurityOrigin
-    QWebSecurityOrigin::addLocalScheme(QL1S("error"));
+    // Add all KDE's local protocols to QWebSecurityOrigin
     Q_FOREACH (const QString& protocol, KProtocolInfo::protocols()) {
         // file is already a known local scheme and about must not be added
         // to this list since there is about:blank.
@@ -171,6 +172,23 @@ void WebPage::downloadRequest(const QNetworkRequest &request)
     KWebPage::downloadRequest(request);
 }
 
+static QString warningIconData()
+{
+    QString data;
+    QFile f (KIconLoader::global()->iconPath("dialog-warning", -KIconLoader::SizeHuge));
+
+    if (f.open(QIODevice::ReadOnly)) {
+        KMimeType::Ptr mime = KMimeType::mimeType(f.fileName(), KMimeType::ResolveAliases);
+        data += QL1S("data:");
+        data += mime ? mime->name() : KMimeType::defaultMimeType();
+        data += QL1S(";base64,");
+        data += f.readAll().toBase64();
+        f.close();
+    }
+
+    return data;
+}
+
 QString WebPage::errorPage(int code, const QString& text, const KUrl& reqUrl) const
 {
     QString errorName, techName, description;
@@ -191,7 +209,7 @@ QString WebPage::errorPage(int code, const QString& text, const KUrl& reqUrl) co
 
     html.replace( QL1S( "TITLE" ), i18n( "Error: %1", errorName ) );
     html.replace( QL1S( "DIRECTION" ), QApplication::isRightToLeft() ? "rtl" : "ltr" );
-    html.replace( QL1S( "ICON_PATH" ), KUrl(KIconLoader::global()->iconPath("dialog-warning", -KIconLoader::SizeHuge)).url() );
+    html.replace( QL1S( "ICON_PATH" ), warningIconData());
 
     QString doc (QL1S( "<h1>" ));
     doc += i18n( "The requested operation could not be completed" );
@@ -331,6 +349,14 @@ static bool domainSchemeMatch(const QUrl& u1, const QUrl& u2)
     return (u1List == u2List);
 }
 
+static void resetPluginsLoadedOnDemandFor(QWebPluginFactory* _factory)
+{
+    WebPluginFactory* factory = qobject_cast<WebPluginFactory*>(_factory);
+    if (factory) {
+        factory->resetPluginOnDemandList();
+    }
+}
+
 bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &request, NavigationType type)
 {
     QUrl reqUrl (request.url());
@@ -362,7 +388,17 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
         case QWebPage::NavigationTypeFormResubmitted:
             if (!checkFormData(request))
                 return false;
-            // TODO: Prompt user for form re-submission ???
+            if (KMessageBox::warningContinueCancel(view(),
+                            i18n("<qt><p>To display the requested web page again, "
+                                  "the browser needs to resend information you have "
+                                  "previously submitted.</p>"
+                                  "<p>If you were shopping online and made a purchase, "
+                                  "click the Cancel button to prevent a duplicate purchase."
+                                  "Otherwise, click the Continue button to display the web"
+                                  "page again.</p>"),
+                            i18n("Resubmit Information")) == KMessageBox::Cancel) {
+                return false;
+            }
             break;
         case QWebPage::NavigationTypeBackOrForward:
             // If history navigation is locked, ignore all such requests...
@@ -374,13 +410,22 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
             //kDebug() << "Navigating to item (" << history()->currentItemIndex()
             //         << "of" << history()->count() << "):" << history()->currentItem().url();
             inPageRequest = false;
+            if (!isBlankUrl(reqUrl)) {
+                resetPluginsLoadedOnDemandFor(pluginFactory());
+            }
             break;
         case QWebPage::NavigationTypeReload:
-            inPageRequest = false;
             setRequestMetaData(QL1S("cache"), QL1S("reload"));
+            inPageRequest = false;
+            if (!isBlankUrl(reqUrl)) {
+                resetPluginsLoadedOnDemandFor(pluginFactory());
+            }
             break;
         case QWebPage::NavigationTypeOther:
             inPageRequest = !isTypedUrl;
+            if (isTypedUrl && !isBlankUrl(reqUrl)) {
+              resetPluginsLoadedOnDemandFor(pluginFactory());
+            }
             break;
         default:
             break;
@@ -405,6 +450,8 @@ bool WebPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequest &r
         m_noJSOpenWindowCheck = (!isTypedUrl && type != QWebPage::NavigationTypeOther);
     }
 
+    // Honor the enabling/disabling of plugins per host.
+    settings()->setAttribute(QWebSettings::PluginsEnabled, WebKitSettings::self()->isPluginsEnabled(reqUrl.host()));
     return KWebPage::acceptNavigationRequest(frame, request, type);
 }
 
@@ -468,7 +515,7 @@ KWebKitPart* WebPage::part() const
 
 void WebPage::setPart(KWebKitPart* part)
 {
-    m_part = QWeakPointer<KWebKitPart>(part);
+    m_part = part;
 }
 
 void WebPage::slotRequestFinished(QNetworkReply *reply)
@@ -532,13 +579,8 @@ void WebPage::slotRequestFinished(QNetworkReply *reply)
 
     if (isMainFrameRequest) {
         const WebPageSecurity security = (m_sslInfo.isValid() ? PageEncrypted : PageUnencrypted);
-        emit part()->browserExtension()->setPageSecurity(security);
+        emit m_part->browserExtension()->setPageSecurity(security);
     }
-}
-
-static bool isBlankUrl(const KUrl& url)
-{
-    return (url.isEmpty() || url.url() == QL1S("about:blank"));
 }
 
 void WebPage::slotUnsupportedContent(QNetworkReply* reply)
@@ -556,12 +598,12 @@ void WebPage::slotUnsupportedContent(QNetworkReply* reply)
 
     if (KWebPage::handleReply(reply, &mimeType, &metaData)) {
         reply->deleteLater();
-        if (qobject_cast<NewWindowPage*>(this) && isBlankUrl(m_part.data()->url())) {
-            m_part.data()->closeUrl();
-            if (m_part.data()->arguments().metaData().contains(QL1S("new-window"))) {
-                m_part.data()->widget()->topLevelWidget()->close();
+        if (qobject_cast<NewWindowPage*>(this) && isBlankUrl(m_part->url())) {
+            m_part->closeUrl();
+            if (m_part->arguments().metaData().contains(QL1S("new-window"))) {
+                m_part->widget()->topLevelWidget()->close();
             } else {
-                delete m_part.data();
+                delete m_part;
             }
         }
         return;
@@ -573,7 +615,7 @@ void WebPage::slotUnsupportedContent(QNetworkReply* reply)
         KParts::OpenUrlArguments args;
         args.setMimeType(mimeType);
         args.metaData() = metaData;
-        emit part()->browserExtension()->openUrlRequest(reply->url(), args, KParts::BrowserArguments());
+        emit m_part->browserExtension()->openUrlRequest(reply->url(), args, KParts::BrowserArguments());
         return;
     }
     reply->deleteLater();
@@ -590,7 +632,7 @@ void WebPage::slotGeometryChangeRequested(const QRect & rect)
     // window will be in maximized mode where moving it will not be possible...
     if (WebKitSettings::self()->windowMovePolicy(host) == KParts::HtmlSettingsInterface::JSWindowMoveAllow &&
         (view()->x() != rect.x() || view()->y() != rect.y()))
-        emit part()->browserExtension()->moveTopLevelWidget(rect.x(), rect.y());
+        emit m_part->browserExtension()->moveTopLevelWidget(rect.x(), rect.y());
 
     const int height = rect.height();
     const int width = rect.width();
@@ -611,7 +653,7 @@ void WebPage::slotGeometryChangeRequested(const QRect & rect)
 
     if (WebKitSettings::self()->windowResizePolicy(host) == KParts::HtmlSettingsInterface::JSWindowResizeAllow) {
         //kDebug() << "resizing to " << width << "x" << height;
-        emit part()->browserExtension()->resizeTopLevelWidget(width, height);
+        emit m_part->browserExtension()->resizeTopLevelWidget(width, height);
     }
 
     // If the window is out of the desktop, move it up/left
@@ -625,7 +667,7 @@ void WebPage::slotGeometryChangeRequested(const QRect & rect)
         moveByY = - bottom + sg.bottom(); // always <0
 
     if ((moveByX || moveByY) && WebKitSettings::self()->windowMovePolicy(host) == KParts::HtmlSettingsInterface::JSWindowMoveAllow)
-        emit part()->browserExtension()->moveTopLevelWidget(view()->x() + moveByX, view()->y() + moveByY);
+        emit m_part->browserExtension()->moveTopLevelWidget(view()->x() + moveByX, view()->y() + moveByY);
 }
 
 bool WebPage::checkLinkSecurity(const QNetworkRequest &req, NavigationType type) const
@@ -768,7 +810,7 @@ bool WebPage::handleMailToUrl (const QUrl &url, NavigationType type) const
         }
 
         //kDebug() << "Emitting openUrlRequest with " << mailtoUrl;
-        emit part()->browserExtension()->openUrlRequest(mailtoUrl);
+        emit m_part->browserExtension()->openUrlRequest(mailtoUrl);
         return true;
     }
 
@@ -823,27 +865,25 @@ bool NewWindowPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequ
             const KParts::HtmlSettingsInterface::JSWindowOpenPolicy policy = WebKitSettings::self()->windowOpenPolicy(reqUrl.host());
             switch (policy) {
             case KParts::HtmlSettingsInterface::JSWindowOpenDeny:
-                // TODO: Implement a way for showing the blocked popup dialog.
+                // TODO: Implement support for dealing with blocked pop up windows.
                 this->deleteLater();
                 return false;
             case KParts::HtmlSettingsInterface::JSWindowOpenAsk: {
                 const QString message = (reqUrl.isEmpty() ?
-                                          i18n("This site is requesting to open up a popup window.\n"
+                                          i18n("This site is requesting to open a new popup window.\n"
                                                "Do you want to allow this?") :
                                           i18n("<qt>This site is requesting to open a popup window to"
                                                "<p>%1</p><br/>Do you want to allow this?</qt>",
-                                               KStringHandler::rsqueeze(Qt::escape(reqUrl.prettyUrl()), 100))
-                                        );
+                                               KStringHandler::rsqueeze(Qt::escape(reqUrl.prettyUrl()), 100)));
                 if (KMessageBox::questionYesNo(view(), message,
                                                i18n("Javascript Popup Confirmation"),
                                                KGuiItem(i18n("Allow")),
-                                               KGuiItem(i18n("Do Not Allow"))) == KMessageBox::Yes) {
-                    break;
-                } else {
-                    // TODO: Implement a way for showing the blocked popup dialog.
+                                               KGuiItem(i18n("Do Not Allow"))) == KMessageBox::No) {
+                    // TODO: Implement support for dealing with blocked pop up windows.
                     this->deleteLater();
                     return false;
                 }
+               break;
             }
             default:
                 break;
@@ -954,6 +994,7 @@ void NewWindowPage::slotLoadFinished(bool ok)
 
     // OpenUrl args...
     KParts::OpenUrlArguments uargs;
+    uargs.setMimeType(QL1S("text/html"));
     uargs.setActionRequestedByUser(false);
 
     // Window args...
