@@ -1,4 +1,4 @@
-webkitkde (1.3~git20120518.9a111005-3) UNRELEASED; urgency=low
+webkitkde (1.3~git20120518.9a111005-3) unstable; urgency=low
 
   [ Lisandro Damián Nicanor Pérez Meyer ]
   * Bump Build-Depends on kdelibs to 4:4.8.3. Thanks Nobuhiro for noticing!
@@ -7,7 +7,7 @@ webkitkde (1.3~git20120518.9a111005-3) UNRELEASED; urgency=low
   [ Adrien Grellier ]
   * Backport fix 0821d519 to avoid a crash.
 
- -- Debian KDE Extras Team <pkg-kde-extras@lists.alioth.debian.org>  Thu, 09 Aug 2012 21:44:48 -0300
+ -- Debian KDE Extras Team <pkg-kde-extras@lists.alioth.debian.org>  Sun, 28 Oct 2012 08:44:39 +0100
 
 webkitkde (1.3~git20120518.9a111005-2) unstable; urgency=low
 
