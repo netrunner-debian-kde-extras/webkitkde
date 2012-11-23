@@ -107,9 +107,11 @@ void FakePluginWidget::load (bool loadAll)
     QList<QWebFrame*> frames;
     frames.append(view->page()->mainFrame());
 
-    QString selector = QLatin1String("object:not([type]),embed:not([type]),object[type=\"");
+    QString selector (QLatin1String("applet:not([type]),embed:not([type]),object:not([type]),applet[type=\""));
     selector += m_mimeType;
     selector += QLatin1String("\"],embed[type=\"");
+    selector += m_mimeType;
+    selector += QLatin1String("\"],object[type=\"");
     selector += m_mimeType;
     selector += QLatin1String("\"]");
 
@@ -203,11 +205,13 @@ QObject* WebPluginFactory::create (const QString& _mimeType, const QUrl& url, co
 
     Q_ASSERT(mPart); // should never happen!!
     KParts::ReadOnlyPart* part = 0;
-    QWebView* view = mPart->view();
+    QWebView* view = (mPart ? mPart->view() : 0);
 
     if (noPluginHandling || !excludedMimeType(mimeType)) {
         QWebFrame* frame = (view ? view->page()->currentFrame() : 0);
-        part = createPartInstanceFrom(mimeType, argumentNames, argumentValues, view, frame);
+        if (frame) {
+            part = createPartInstanceFrom(mimeType, argumentNames, argumentValues, view, frame);
+        }
     }
 
     kDebug() << "Asked for" << mimeType << "plugin, got" << part;

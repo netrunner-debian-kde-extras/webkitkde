@@ -246,11 +246,6 @@ void KWebKitPart::initActions()
     action = actionCollection()->addAction(KStandardAction::Find, "find", this, SLOT(slotShowSearchBar()));
     action->setWhatsThis(i18nc("find action \"whats this\" text", "<h3>Find text</h3>"
                               "Shows a dialog that allows you to find text on the displayed page."));
-
-    action = actionCollection()->addAction(KStandardAction::FindNext, "findnext",
-                                           m_searchBar, SLOT(findNext()));
-    action = actionCollection()->addAction(KStandardAction::FindPrev, "findprev",
-                                           m_searchBar, SLOT(findPrevious()));
 }
 
 void KWebKitPart::updateActions()
@@ -433,7 +428,6 @@ bool KWebKitPart::openFile()
 
 void KWebKitPart::slotLoadStarted()
 {
-    kDebug() << "main frame:" << page()->mainFrame() << "current frame:" << page()->currentFrame();
     emit started(0);
     updateActions();
 }
@@ -441,7 +435,6 @@ void KWebKitPart::slotLoadStarted()
 void KWebKitPart::slotFrameLoadFinished(bool ok)
 {
     QWebFrame* frame = (sender() ? qobject_cast<QWebFrame*>(sender()) : page()->mainFrame());
-    kDebug() << "finished ok?" << ok << "FRAME:" << frame << "SENDER:" << sender();
 
     if (ok) {
         const QUrl currentUrl (frame->baseUrl().resolved(frame->url()));
@@ -455,7 +448,6 @@ void KWebKitPart::slotFrameLoadFinished(bool ok)
             } else {
                 // Attempt to fill the web form...
                 KWebWallet *webWallet = page() ? page()->wallet() : 0;
-                kDebug() << "FOUND WALLET:" << webWallet;
                 if (webWallet) {
                     webWallet->fillFormData(frame, false);
                 }
@@ -757,9 +749,15 @@ void KWebKitPart::slotShowSearchBar()
 {
     if (!m_searchBar) {
         // Create the search bar...
-        m_searchBar = new KDEPrivate::SearchBar(widget());
+        m_searchBar = new SearchBar(widget());
         connect(m_searchBar, SIGNAL(searchTextChanged(QString,bool)),
                 this, SLOT(slotSearchForText(QString,bool)));
+
+        actionCollection()->addAction(KStandardAction::FindNext, "findnext",
+                                      m_searchBar, SLOT(findNext()));
+        actionCollection()->addAction(KStandardAction::FindPrev, "findprev",
+                                      m_searchBar, SLOT(findPrevious()));
+
         QBoxLayout* lay = qobject_cast<QBoxLayout*>(widget()->layout());
         if (lay) {
           lay->addWidget(m_searchBar);
@@ -889,7 +887,7 @@ void KWebKitPart::slotSaveFormDataRequested (const QString& key, const QUrl& url
         return;
 
     if (!m_passwordBar) {
-        m_passwordBar = new KDEPrivate::PasswordBar(widget());
+        m_passwordBar = new PasswordBar(widget());
         KWebWallet* wallet = page()->wallet();
         if (!wallet) {
             kWarning() << "No wallet instance found! This should never happen!";
