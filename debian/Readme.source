@@ -1,0 +1,66 @@
+
+==============================
+Debian packaging of webkitkde
+===============================
+
+This file aims to document the packaging of webkitkde. Please feel free to improve it if necessary.
+
+It is mainly a reminder for myself, and an help for the newcomers :)
+
+Howto get the upstream sources ?
+=================================
+
+Upstream does not provide a tar.bz2 package, but the sources are accessible here:
+
+  https://projects.kde.org/projects/extragear/base/kwebkitpart
+
+Step to import a new version:
+
+1. create a tarball, without including the git versionning stuff.
+2. name it webkitkde_version.orig.tar.bz2
+3. import it to the upstream branches of the debian repo
+   1. update to the upstream branch
+   2. remove all exept the debian/ directory
+   3. untar the new upstream version
+
+
+Debian Packaging
+=================
+
+The master branch should be for sid, and each debian release (wheezy, etc.) has its own branch.
+
+Once the upstream branches is up to date, then merge it to the master, to prepare a new release in the Debian archive.
+
+To prepare a release into Debian, don't forget:
+- to update the copyright file
+- write every debian changes on the changelog.
+- correct all the lintian warnings
+- be sure about if files has been added or removed
+- dch -r and add a tag in git
+
+
+How to create the debian package?
+==================================
+
+I am using sbuild to ensure everything will be OK. The settings of sbuild is describe here :
+
+  http://wiki.debian.org/sbuild
+
+..
+    sbuild-update -udg unstable
+    sbuild -A -d unstable
+
+
+Dealing with bugs
+==================
+
+TODO
+
+Usefull links
+==============
+
+http://anonscm.debian.org/gitweb/?p=pkg-kde/kde-extras/webkitkde.git
+http://packages.qa.debian.org/w/webkitkde.html
+
+
+.. vim:set filetype=rst:
