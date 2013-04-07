@@ -17,6 +17,10 @@ Upstream does not provide a tar.bz2 package, but the sources are accessible here
 Step to import a new version:
 
 1. create a tarball, without including the git versionning stuff.
+
+..
+   tar -czf webkitkde_VERSION.orig.tar.gz --exclude-vcs --exclude debian/ webkitkde/
+
 2. name it webkitkde_version.orig.tar.bz2
 3. import it to the upstream branches of the debian repo
    1. update to the upstream branch
