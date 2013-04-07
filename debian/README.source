@@ -36,7 +36,8 @@ To prepare a release into Debian, don't forget:
 - write every debian changes on the changelog.
 - correct all the lintian warnings
 - be sure about if files has been added or removed
-- dch -r and add a tag in git
+- dch -r to prepare the changelog for an upload
+- tag the release in git when we get the accepted mail
 
 
 How to create the debian package?
