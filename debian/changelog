@@ -1,8 +1,9 @@
-webkitkde (1.3.4-1) UNRELEASED; urgency=medium
+webkitkde (1.3.4-2) UNRELEASED; urgency=medium
 
   * New upstream release 1.3.4
+  * Change my email addresse in debian/control 
 
- -- Adrien Grellier <perso@adrieng.fr>  Sun, 20 Jul 2014 21:20:32 +0200
+ -- Adrien Grellier <perso@adrieng.fr>  Sun, 20 Jul 2014 21:54:52 +0200
 
 webkitkde (1.3.2-2) unstable; urgency=low
 

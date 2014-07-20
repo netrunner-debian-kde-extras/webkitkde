@@ -2,7 +2,7 @@ Source: webkitkde
 Section: web
 Priority: optional
 Maintainer: Debian KDE Extras Team <pkg-kde-extras@lists.alioth.debian.org>
-Uploaders: Adrien Grellier <adrien.grellier@laposte.net>,
+Uploaders: Adrien Grellier <perso@adrieng.fr>,
  Raúl Sánchez Siles <rasasi78@gmail.com>,
 Build-Depends: cmake, debhelper (>= 9), kdelibs5-dev (>= 4:4.8.3), libqtwebkit-dev, pkg-kde-tools, dpkg-dev (>=1.16.1)
 Standards-Version: 3.9.5
