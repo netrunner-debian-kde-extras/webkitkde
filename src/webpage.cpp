@@ -536,14 +536,16 @@ void WebPage::slotRequestFinished(QNetworkReply *reply)
     const bool shouldResetSslInfo = (m_sslInfo.isValid() && !domainSchemeMatch(requestUrl, m_sslInfo.url()));
     // Only deal with non-redirect responses...
     const QVariant redirectVar = reply->attribute(QNetworkRequest::RedirectionTargetAttribute);
-    if (redirectVar.isValid()) {
+    const bool isMainFrameRequest = (frame == mainFrame());
+
+    if (isMainFrameRequest && redirectVar.isValid()) {
         m_sslInfo.restoreFrom(reply->attribute(static_cast<QNetworkRequest::Attribute>(KIO::AccessManager::MetaData)),
                               reply->url(), shouldResetSslInfo);
         return;
     }
 
     const int errCode = errorCodeFromReply(reply);
-    const bool isMainFrameRequest = (frame == mainFrame());
+    kDebug() << frame << "is main frame request?" << isMainFrameRequest << requestUrl;
     // Handle any error...
     switch (errCode) {
         case 0:
@@ -946,7 +948,6 @@ bool NewWindowPage::acceptNavigationRequest(QWebFrame *frame, const QNetworkRequ
 
 void NewWindowPage::slotGeometryChangeRequested(const QRect & rect)
 {
-    //kDebug() << rect;
     if (!rect.isValid())
         return;
 
